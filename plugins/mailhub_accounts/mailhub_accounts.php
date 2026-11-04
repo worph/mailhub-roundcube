@@ -76,6 +76,8 @@ class mailhub_accounts extends rcube_plugin
             $name = new html_inputfield(['name' => $p . '[name]', 'id' => $id . '_name', 'size' => 40]);
             $pass = new html_passwordfield(['name' => $p . '[pass]', 'id' => $id . '_pass', 'size' => 40,
                 'autocomplete' => 'new-password', 'placeholder' => $this->gettext('passunchanged')]);
+            $folder = new html_inputfield(['name' => $p . '[folder]', 'id' => $id . '_folder', 'size' => 20,
+                'placeholder' => $this->gettext('folderinbox')]);
             $delete = new html_checkbox(['name' => $p . '[delete]', 'id' => $id . '_delete', 'value' => 1]);
             $remove = new html_checkbox(['name' => $p . '[remove]', 'id' => $id . '_remove', 'value' => 1]);
 
@@ -88,6 +90,8 @@ class mailhub_accounts extends rcube_plugin
                         . ' · ' . $this->gettext('send') . ' ' . $a['smtp_host'] . ':' . $a['smtp_port'])],
                     'name'    => ['title' => html::label($id . '_name', rcube::Q($this->gettext('name'))), 'content' => $name->show($a['name'] ?? '')],
                     'pass'    => ['title' => html::label($id . '_pass', rcube::Q($this->gettext('newpass'))), 'content' => $pass->show()],
+                    'folder'  => ['title' => html::label($id . '_folder', rcube::Q($this->gettext('folder'))),
+                        'content' => $folder->show($a['folder'] ?? '') . ' ' . html::span('hint', rcube::Q($this->gettext('folderhint')))],
                     'delete'  => ['title' => html::label($id . '_delete', rcube::Q($this->gettext('delete'))),
                         'content' => $delete->show(!empty($a['delete']) ? 1 : '') . ' ' . html::span('hint', rcube::Q($this->gettext('deletehint')))],
                     'remove'  => ['title' => html::label($id . '_remove', rcube::Q($this->gettext('remove'))),
@@ -149,12 +153,16 @@ class mailhub_accounts extends rcube_plugin
             'smtp_host' => ['title' => $label('smtp_host', 'smtp_host'), 'content' => $field('smtp_host', $other + ['placeholder' => 'smtp.example.com'])->show()],
             'smtp_port' => ['title' => $label('smtp_port', 'smtp_port'), 'content' => $field('smtp_port', $other + ['size' => 6])->show('465')
                 . ' ' . $security('smtp_security', ['ssl', 'tls', 'none'])->show('ssl')],
+            'folder'   => ['title' => $label('folder', 'folder'),
+                'content' => $field('folder', ['size' => 20, 'placeholder' => $this->gettext('folderinbox')])->show()
+                    . ' ' . html::span('hint', rcube::Q($this->gettext('folderhint')))],
             'delete'   => ['title' => $label('delete', 'delete'),
                 'content' => $delete->show('') . ' ' . html::span('hint', rcube::Q($this->gettext('deletehint')))],
         ];
 
         // Show the server fields only for "Other provider", and the matching
         // app-password help for each preset.
+        $checking = json_encode($this->gettext('checking'));
         $help = json_encode([
             'gmail' => $this->gettext('passhelp_gmail'),
             'privateemail' => $this->gettext('passhelp_privateemail'),
@@ -165,7 +173,16 @@ class mailhub_accounts extends rcube_plugin
             . " var p = $('#mh_preset').val();"
             . " $('.mh-other').closest('tr, .form-group, .row').toggle(p == 'other');"
             . " $('#mh_passhelp').text(mh_help[p]); };"
-            . " $('#mh_preset').on('change', mh_toggle); mh_toggle();",
+            . " $('#mh_preset').on('change', mh_toggle); mh_toggle();"
+            // Saving a new account (or a new password) logs in to the provider's
+            // IMAP and SMTP first, which takes a few seconds: say so, and keep the
+            // Save button from being pressed twice meanwhile.
+            . " rcmail.addEventListener('beforesave', function() {"
+            . "   var testing = $.trim($('#mh_new_email').val()) !== ''"
+            . "     || $('input[type=password]').filter(function() { return this.value !== ''; }).length > 0;"
+            . "   rcmail.display_message(testing ? $checking : rcmail.get_label('saving'), 'loading', 60000);"
+            . "   $('button.mainaction, .formbuttons button').prop('disabled', true);"
+            . " });",
             'docready'
         );
 
@@ -204,6 +221,11 @@ class mailhub_accounts extends rcube_plugin
             }
             $accounts[$slug]['name'] = trim((string) ($in['name'] ?? ''));
             $accounts[$slug]['delete'] = !empty($in['delete']);
+            $folder = self::clean_folder((string) ($in['folder'] ?? ''));
+            if ($folder === null) {
+                return $this->refuse($args, $a['email'] . ': ' . $this->gettext('badfolder'));
+            }
+            $accounts[$slug]['folder'] = $folder;
             $pass = self::clean_pass((string) ($in['pass'] ?? ''), $a['preset'] ?? 'other');
             if ($pass !== '') {
                 if ($error = $this->test_account($accounts[$slug], $pass)) {
@@ -286,6 +308,11 @@ class mailhub_accounts extends rcube_plugin
             $error = $this->gettext('nopass');
             return null;
         }
+        $folder = self::clean_folder((string) ($in['folder'] ?? ''));
+        if ($folder === null) {
+            $error = $this->gettext('badfolder');
+            return null;
+        }
         if (preg_match('/[\r\n]/', $pass)) {
             $error = $this->gettext('badpass');
             return null;
@@ -321,7 +348,23 @@ class mailhub_accounts extends rcube_plugin
             'user'   => $user,
             'pass'   => $pass,
             'delete' => !empty($in['delete']),
+            'folder' => $folder,
         ];
+    }
+
+    /**
+     * The folder an account's mail is delivered to: '' for the Inbox, else a
+     * name Dovecot creates on first delivery (it arrives as admin+<name> over
+     * LMTP, lmtp_save_to_detail_mailbox). An address local part cannot carry
+     * spaces or most punctuation, hence the narrow set. Null when invalid.
+     */
+    private static function clean_folder($folder)
+    {
+        $folder = trim($folder);
+        if ($folder === '' || strcasecmp($folder, 'INBOX') == 0) {
+            return '';
+        }
+        return preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/', $folder) ? $folder : null;
     }
 
     /**
@@ -464,7 +507,8 @@ class mailhub_accounts extends rcube_plugin
             'type = MDA_lmtp',
             'host = ' . $rcmail->config->get('mailhub_lmtp_host', 'mailhub-imap'),
             'port = ' . (int) $rcmail->config->get('mailhub_lmtp_port', 2424),
-            'override = ' . $lmtp_user,
+            // admin+<folder>: Dovecot delivers into that folder (see clean_folder).
+            'override = ' . $lmtp_user . (($a['folder'] ?? '') !== '' ? '+' . $a['folder'] : ''),
             '',
             '[options]',
             'read_all = false',
