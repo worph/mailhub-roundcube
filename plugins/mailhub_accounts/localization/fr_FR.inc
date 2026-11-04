@@ -39,7 +39,7 @@ $labels['sec_none'] = 'Aucun (non chiffré)';
 $labels['checking'] = 'Vérification du compte auprès du fournisseur…';
 $labels['folder'] = 'Dossier';
 $labels['folderinbox'] = 'Boîte de réception';
-$labels['folderhint'] = 'Laissez vide pour la boîte de réception, ou donnez un nom (ex. Contact) pour ranger le courrier de cette adresse dans son propre dossier, comme une boîte séparée. S\'applique au nouveau courrier.';
+$labels['folderhint'] = 'Le dossier où est rangé le nouveau courrier de cette adresse, comme une boîte séparée : par défaut l\'adresse elle-même. Laissez vide pour la boîte de réception.';
 $labels['waiting'] = 'En attente de la première relève.';
 $labels['fetchok'] = 'Dernière relève $when : OK, $last';
 $labels['fetchfailed'] = 'Dernière relève $when en ÉCHEC : $last';
@@ -47,7 +47,7 @@ $labels['fetchbadlogin'] = 'le fournisseur a refusé le mot de passe. Si vous l\
 
 $messages = [];
 $messages['dirnotwritable'] = 'MailHub ne peut pas écrire son dossier de comptes (getmail/accounts dans le dossier de l\'app). Vérifiez que l\'app a été installée par Maison, puis redémarrez-la.';
-$messages['badfolder'] = 'Le nom du dossier ne peut contenir que des lettres, chiffres, point, tiret et tiret bas (sans espace), 40 caractères au plus.';
+$messages['badfolder'] = 'Le nom du dossier peut contenir lettres, chiffres, espaces et . _ @ + - (pas de / ni de guillemets), 64 caractères au plus.';
 $messages['bademail'] = 'Saisissez une adresse mail valide.';
 $messages['nopass'] = 'Saisissez le mot de passe d\'application du compte.';
 $messages['badpass'] = 'Le mot de passe ne peut pas contenir de retour à la ligne.';

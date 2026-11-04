@@ -39,7 +39,7 @@ $labels['sec_none'] = 'None (unencrypted)';
 $labels['checking'] = 'Checking the account with its provider…';
 $labels['folder'] = 'Folder';
 $labels['folderinbox'] = 'Inbox';
-$labels['folderhint'] = 'Leave empty for the Inbox, or give a name (e.g. Contact) to file this address\'s mail in its own folder, like a separate inbox. Applies to new mail.';
+$labels['folderhint'] = 'The folder this address\'s new mail is filed in, like a separate inbox: by default the address itself. Leave it empty to use the Inbox.';
 $labels['waiting'] = 'Waiting for the first fetch.';
 $labels['fetchok'] = 'Last fetch $when: OK, $last';
 $labels['fetchfailed'] = 'Last fetch $when FAILED: $last';
@@ -47,7 +47,7 @@ $labels['fetchbadlogin'] = 'the provider refused the password. If you revoked or
 
 $messages = [];
 $messages['dirnotwritable'] = 'MailHub cannot write its accounts folder (getmail/accounts in the app folder). Check that the app was installed by Maison, then restart it.';
-$messages['badfolder'] = 'The folder name can only use letters, digits, dot, dash and underscore (no spaces), 40 characters at most.';
+$messages['badfolder'] = 'The folder name can use letters, digits, spaces and . _ @ + - (no / or quotes), 64 characters at most.';
 $messages['bademail'] = 'Enter a valid email address.';
 $messages['nopass'] = 'Enter the account\'s app password.';
 $messages['badpass'] = 'The password cannot contain line breaks.';

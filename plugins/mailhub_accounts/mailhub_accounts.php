@@ -177,6 +177,12 @@ class mailhub_accounts extends rcube_plugin
             // Saving a new account (or a new password) logs in to the provider's
             // IMAP and SMTP first, which takes a few seconds: say so, and keep the
             // Save button from being pressed twice meanwhile.
+            // New accounts default to their own folder named after the address:
+            // the Folder field follows the email as it is typed, until edited.
+            . " var mh_folder_touched = false;"
+            . " $('#mh_new_folder').on('input', function() { mh_folder_touched = true; });"
+            . " $('#mh_new_email').on('input', function() {"
+            . "   if (!mh_folder_touched) $('#mh_new_folder').val($.trim(this.value).toLowerCase()); });"
             . " rcmail.addEventListener('beforesave', function() {"
             . "   var testing = $.trim($('#mh_new_email').val()) !== ''"
             . "     || $('input[type=password]').filter(function() { return this.value !== ''; }).length > 0;"
@@ -308,7 +314,9 @@ class mailhub_accounts extends rcube_plugin
             $error = $this->gettext('nopass');
             return null;
         }
-        $folder = self::clean_folder((string) ($in['folder'] ?? ''));
+        // Its own folder named after the address by default (the form fills it in
+        // as the address is typed); a Folder sent empty means the Inbox.
+        $folder = self::clean_folder(array_key_exists('folder', $in) ? (string) $in['folder'] : $email);
         if ($folder === null) {
             $error = $this->gettext('badfolder');
             return null;
@@ -354,9 +362,11 @@ class mailhub_accounts extends rcube_plugin
 
     /**
      * The folder an account's mail is delivered to: '' for the Inbox, else a
-     * name Dovecot creates on first delivery (it arrives as admin+<name> over
-     * LMTP, lmtp_save_to_detail_mailbox). An address local part cannot carry
-     * spaces or most punctuation, hence the narrow set. Null when invalid.
+     * name Dovecot creates on first delivery — by default the address itself
+     * (pierre.henri@aptero.co). It travels in the LMTP recipient's quoted local
+     * part (see lmtp_recipient), which takes anything but a quote, a backslash or
+     * a control character; "/" would nest folders, and the LMTP address is ASCII.
+     * Null when invalid.
      */
     private static function clean_folder($folder)
     {
@@ -364,7 +374,19 @@ class mailhub_accounts extends rcube_plugin
         if ($folder === '' || strcasecmp($folder, 'INBOX') == 0) {
             return '';
         }
-        return preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/', $folder) ? $folder : null;
+        return preg_match('/^[A-Za-z0-9][A-Za-z0-9 ._@+-]{0,63}$/', $folder) ? $folder : null;
+    }
+
+    /**
+     * The address getmail delivers an account's mail to over LMTP. With a folder
+     * it is "admin+<folder>"@mailhub: Dovecot files mail for user+detail into the
+     * detail's folder (lmtp_save_to_detail_mailbox), the quotes let the folder
+     * carry an @, and the domain — which Dovecot drops (auth_username_format) —
+     * is what the split happens on.
+     */
+    private static function lmtp_recipient($user, $folder)
+    {
+        return $folder === '' ? $user : '"' . $user . '+' . $folder . '"@mailhub';
     }
 
     /**
@@ -507,8 +529,7 @@ class mailhub_accounts extends rcube_plugin
             'type = MDA_lmtp',
             'host = ' . $rcmail->config->get('mailhub_lmtp_host', 'mailhub-imap'),
             'port = ' . (int) $rcmail->config->get('mailhub_lmtp_port', 2424),
-            // admin+<folder>: Dovecot delivers into that folder (see clean_folder).
-            'override = ' . $lmtp_user . (($a['folder'] ?? '') !== '' ? '+' . $a['folder'] : ''),
+            'override = ' . self::lmtp_recipient($lmtp_user, $a['folder'] ?? ''),
             '',
             '[options]',
             'read_all = false',
