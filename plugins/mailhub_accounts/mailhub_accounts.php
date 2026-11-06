@@ -78,7 +78,6 @@ class mailhub_accounts extends rcube_plugin
                 'autocomplete' => 'new-password', 'placeholder' => $this->gettext('passunchanged')]);
             $folder = new html_inputfield(['name' => $p . '[folder]', 'id' => $id . '_folder', 'size' => 20,
                 'placeholder' => $this->gettext('folderinbox')]);
-            $delete = new html_checkbox(['name' => $p . '[delete]', 'id' => $id . '_delete', 'value' => 1]);
             $remove = new html_checkbox(['name' => $p . '[remove]', 'id' => $id . '_remove', 'value' => 1]);
 
             $args['blocks']['acc_' . $id] = [
@@ -92,8 +91,6 @@ class mailhub_accounts extends rcube_plugin
                     'pass'    => ['title' => html::label($id . '_pass', rcube::Q($this->gettext('newpass'))), 'content' => $pass->show()],
                     'folder'  => ['title' => html::label($id . '_folder', rcube::Q($this->gettext('folder'))),
                         'content' => $folder->show($a['folder'] ?? '') . ' ' . html::span('hint', rcube::Q($this->gettext('folderhint')))],
-                    'delete'  => ['title' => html::label($id . '_delete', rcube::Q($this->gettext('delete'))),
-                        'content' => $delete->show(!empty($a['delete']) ? 1 : '') . ' ' . html::span('hint', rcube::Q($this->gettext('deletehint')))],
                     'remove'  => ['title' => html::label($id . '_remove', rcube::Q($this->gettext('remove'))),
                         'content' => $remove->show('') . ' ' . html::span('hint', rcube::Q($this->gettext('removehint')))],
                 ],
@@ -135,7 +132,6 @@ class mailhub_accounts extends rcube_plugin
         $label = function ($key, $text) {
             return html::label("mh_new_$key", rcube::Q($this->gettext($text)));
         };
-        $delete = new html_checkbox(['name' => '_new[delete]', 'id' => 'mh_new_delete', 'value' => 1]);
         $pass = new html_passwordfield(['name' => '_new[pass]', 'id' => 'mh_new_pass', 'size' => 40, 'autocomplete' => 'new-password']);
 
         $other = ['class' => 'mh-other'];
@@ -156,8 +152,6 @@ class mailhub_accounts extends rcube_plugin
             'folder'   => ['title' => $label('folder', 'folder'),
                 'content' => $field('folder', ['size' => 20, 'placeholder' => $this->gettext('folderinbox')])->show()
                     . ' ' . html::span('hint', rcube::Q($this->gettext('folderhint')))],
-            'delete'   => ['title' => $label('delete', 'delete'),
-                'content' => $delete->show('') . ' ' . html::span('hint', rcube::Q($this->gettext('deletehint')))],
         ];
 
         // Show the server fields only for "Other provider", and the matching
@@ -226,7 +220,6 @@ class mailhub_accounts extends rcube_plugin
                 continue;
             }
             $accounts[$slug]['name'] = trim((string) ($in['name'] ?? ''));
-            $accounts[$slug]['delete'] = !empty($in['delete']);
             $folder = self::clean_folder((string) ($in['folder'] ?? ''));
             if ($folder === null) {
                 return $this->refuse($args, $a['email'] . ': ' . $this->gettext('badfolder'));
@@ -355,7 +348,6 @@ class mailhub_accounts extends rcube_plugin
             'name'   => trim((string) ($in['name'] ?? '')),
             'user'   => $user,
             'pass'   => $pass,
-            'delete' => !empty($in['delete']),
             'folder' => $folder,
         ];
     }
@@ -533,7 +525,9 @@ class mailhub_accounts extends rcube_plugin
             '',
             '[options]',
             'read_all = false',
-            'delete = ' . (!empty($a['delete']) ? 'true' : 'false'),
+            // IMAP only, and the provider's copy is never touched (the fetch loop
+            // also runs getmail with --dont-delete, for files written by hand).
+            'delete = false',
             'received = false',
             'delivered_to = false',
             '',
