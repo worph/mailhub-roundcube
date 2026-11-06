@@ -76,8 +76,6 @@ class mailhub_accounts extends rcube_plugin
             $name = new html_inputfield(['name' => $p . '[name]', 'id' => $id . '_name', 'size' => 40]);
             $pass = new html_passwordfield(['name' => $p . '[pass]', 'id' => $id . '_pass', 'size' => 40,
                 'autocomplete' => 'new-password', 'placeholder' => $this->gettext('passunchanged')]);
-            $folder = new html_inputfield(['name' => $p . '[folder]', 'id' => $id . '_folder', 'size' => 20,
-                'placeholder' => $this->gettext('folderinbox')]);
             $remove = new html_checkbox(['name' => $p . '[remove]', 'id' => $id . '_remove', 'value' => 1]);
 
             $args['blocks']['acc_' . $id] = [
@@ -89,8 +87,6 @@ class mailhub_accounts extends rcube_plugin
                         . ' · ' . $this->gettext('send') . ' ' . $a['smtp_host'] . ':' . $a['smtp_port'])],
                     'name'    => ['title' => html::label($id . '_name', rcube::Q($this->gettext('name'))), 'content' => $name->show($a['name'] ?? '')],
                     'pass'    => ['title' => html::label($id . '_pass', rcube::Q($this->gettext('newpass'))), 'content' => $pass->show()],
-                    'folder'  => ['title' => html::label($id . '_folder', rcube::Q($this->gettext('folder'))),
-                        'content' => $folder->show($a['folder'] ?? '') . ' ' . html::span('hint', rcube::Q($this->gettext('folderhint')))],
                     'remove'  => ['title' => html::label($id . '_remove', rcube::Q($this->gettext('remove'))),
                         'content' => $remove->show('') . ' ' . html::span('hint', rcube::Q($this->gettext('removehint')))],
                 ],
@@ -149,9 +145,6 @@ class mailhub_accounts extends rcube_plugin
             'smtp_host' => ['title' => $label('smtp_host', 'smtp_host'), 'content' => $field('smtp_host', $other + ['placeholder' => 'smtp.example.com'])->show()],
             'smtp_port' => ['title' => $label('smtp_port', 'smtp_port'), 'content' => $field('smtp_port', $other + ['size' => 6])->show('465')
                 . ' ' . $security('smtp_security', ['ssl', 'tls', 'none'])->show('ssl')],
-            'folder'   => ['title' => $label('folder', 'folder'),
-                'content' => $field('folder', ['size' => 20, 'placeholder' => $this->gettext('folderinbox')])->show()
-                    . ' ' . html::span('hint', rcube::Q($this->gettext('folderhint')))],
         ];
 
         // Show the server fields only for "Other provider", and the matching
@@ -171,12 +164,6 @@ class mailhub_accounts extends rcube_plugin
             // Saving a new account (or a new password) logs in to the provider's
             // IMAP and SMTP first, which takes a few seconds: say so, and keep the
             // Save button from being pressed twice meanwhile.
-            // New accounts default to their own folder named after the address:
-            // the Folder field follows the email as it is typed, until edited.
-            . " var mh_folder_touched = false;"
-            . " $('#mh_new_folder').on('input', function() { mh_folder_touched = true; });"
-            . " $('#mh_new_email').on('input', function() {"
-            . "   if (!mh_folder_touched) $('#mh_new_folder').val($.trim(this.value).toLowerCase()); });"
             . " rcmail.addEventListener('beforesave', function() {"
             . "   var testing = $.trim($('#mh_new_email').val()) !== ''"
             . "     || $('input[type=password]').filter(function() { return this.value !== ''; }).length > 0;"
@@ -220,11 +207,6 @@ class mailhub_accounts extends rcube_plugin
                 continue;
             }
             $accounts[$slug]['name'] = trim((string) ($in['name'] ?? ''));
-            $folder = self::clean_folder((string) ($in['folder'] ?? ''));
-            if ($folder === null) {
-                return $this->refuse($args, $a['email'] . ': ' . $this->gettext('badfolder'));
-            }
-            $accounts[$slug]['folder'] = $folder;
             $pass = self::clean_pass((string) ($in['pass'] ?? ''), $a['preset'] ?? 'other');
             if ($pass !== '') {
                 if ($error = $this->test_account($accounts[$slug], $pass)) {
@@ -307,9 +289,9 @@ class mailhub_accounts extends rcube_plugin
             $error = $this->gettext('nopass');
             return null;
         }
-        // Its own folder named after the address by default (the form fills it in
-        // as the address is typed); a Folder sent empty means the Inbox.
-        $folder = self::clean_folder(array_key_exists('folder', $in) ? (string) $in['folder'] : $email);
+        // Each account's mail goes to its own folder, named after the address
+        // (no longer a setting; an existing account keeps the folder it has).
+        $folder = self::clean_folder($email);
         if ($folder === null) {
             $error = $this->gettext('badfolder');
             return null;
