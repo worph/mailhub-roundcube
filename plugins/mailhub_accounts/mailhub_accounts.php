@@ -20,7 +20,7 @@ class mailhub_accounts extends rcube_plugin
     public $task = 'settings';
 
     private const PREF = 'mailhub_accounts';
-    private const SECTION = 'mailhub_accounts';
+    private const ACTION = 'plugin.mailhub_accounts';
 
     /** Provider presets: IMAP over SSL, SMTP as a Roundcube host URI. */
     private const PRESETS = [
@@ -36,251 +36,315 @@ class mailhub_accounts extends rcube_plugin
 
     public function init()
     {
-        $this->add_texts('localization/', false);
-
-        $this->add_hook('preferences_sections_list', [$this, 'sections']);
-        $this->add_hook('preferences_list', [$this, 'prefs_form']);
-        $this->add_hook('preferences_save', [$this, 'prefs_save']);
+        $this->add_texts('localization/', true);
+        $this->add_hook('settings_actions', [$this, 'settings_actions']);
+        $this->register_action(self::ACTION, [$this, 'page']);
+        $this->register_action(self::ACTION . '-do', [$this, 'do_action']);
+        $this->register_action(self::ACTION . '-status', [$this, 'status_action']);
+        // the Settings menu entry's icon, on every Settings page
+        $this->include_stylesheet('mailhub_accounts.css');
     }
 
-    public function sections($args)
+    /** "Mail accounts" in the Settings menu, right after Identities. */
+    public function settings_actions($args)
     {
-        $args['list'][self::SECTION] = [
-            'id'      => self::SECTION,
-            'section' => $this->gettext('section'),
+        $entry = [
+            'action' => self::ACTION,
+            'class'  => 'mailhub-accounts',
+            'label'  => 'section',
+            'title'  => 'sectiontitle',
+            'domain' => 'mailhub_accounts',
         ];
+        $pos = count($args['actions']);
+        foreach ($args['actions'] as $i => $a) {
+            if (($a['action'] ?? '') === 'identities') {
+                $pos = $i + 1;
+            }
+        }
+        array_splice($args['actions'], $pos, 0, [$entry]);
 
         return $args;
     }
 
-    // ---------------------------------------------------------------- form ---
+    // ---------------------------------------------------------------- page ---
 
-    public function prefs_form($args)
+    public function page()
     {
-        if ($args['section'] != self::SECTION) {
-            return $args;
-        }
-
         $rcmail = rcmail::get_instance();
-        $accounts = (array) $rcmail->config->get(self::PREF, []);
-
-        if (!is_writable($this->accounts_dir())) {
-            $args['blocks']['broken'] = [
-                'name'    => rcube::Q($this->gettext('section')),
-                'options' => [['title' => '', 'content' => rcube::Q($this->gettext('dirnotwritable'))]],
-            ];
-            return $args;
-        }
-
-        foreach ($accounts as $slug => $a) {
-            $p = '_acc[' . $slug . ']';
-            $id = 'mh_' . preg_replace('/[^a-z0-9]/', '_', $slug);
-            $name = new html_inputfield(['name' => $p . '[name]', 'id' => $id . '_name', 'size' => 40]);
-            $pass = new html_passwordfield(['name' => $p . '[pass]', 'id' => $id . '_pass', 'size' => 40,
-                'autocomplete' => 'new-password', 'placeholder' => $this->gettext('passunchanged')]);
-            $remove = new html_checkbox(['name' => $p . '[remove]', 'id' => $id . '_remove', 'value' => 1]);
-
-            $args['blocks']['acc_' . $id] = [
-                'name'    => rcube::Q($a['email']),
-                'options' => [
-                    'status'  => ['title' => rcube::Q($this->gettext('status')), 'content' => rcube::Q($this->status_text($slug))],
-                    'servers' => ['title' => rcube::Q($this->gettext('servers')), 'content' => rcube::Q(
-                        $this->gettext('receive') . ' ' . $a['imap_host'] . ':' . $a['imap_port']
-                        . ' · ' . $this->gettext('send') . ' ' . $a['smtp_host'] . ':' . $a['smtp_port'])],
-                    'name'    => ['title' => html::label($id . '_name', rcube::Q($this->gettext('name'))), 'content' => $name->show($a['name'] ?? '')],
-                    'pass'    => ['title' => html::label($id . '_pass', rcube::Q($this->gettext('newpass'))), 'content' => $pass->show()],
-                    'remove'  => ['title' => html::label($id . '_remove', rcube::Q($this->gettext('remove'))),
-                        'content' => $remove->show('') . ' ' . html::span('hint', rcube::Q($this->gettext('removehint')))],
-                ],
-            ];
-        }
+        $accounts = $this->accounts();
 
         // Accounts saved before the mirror (getmail) get their mirror file here.
-        foreach ($accounts as $slug => $a) {
-            if (!is_file($this->accounts_dir() . "/$slug.json")) {
-                $this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']));
-                @touch($this->accounts_dir() . '/.sync-now');
+        if (is_writable($this->accounts_dir())) {
+            foreach ($accounts as $slug => $a) {
+                if (!is_file($this->accounts_dir() . "/$slug.json")) {
+                    $this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']));
+                    @touch($this->accounts_dir() . '/.sync-now');
+                }
             }
         }
 
-        $others = array_diff($this->files_on_disk(), array_keys($accounts));
-        if ($others) {
-            $rows = [];
-            foreach ($others as $slug) {
-                $rows[$slug] = ['title' => rcube::Q($slug), 'content' => rcube::Q($this->status_text($slug))];
-            }
-            $rows['help'] = ['title' => '', 'content' => rcube::Q($this->gettext('otherfileshelp'))];
-            $args['blocks']['otherfiles'] = ['name' => rcube::Q($this->gettext('otherfiles')), 'options' => $rows];
-        }
-
-        $args['blocks']['add'] = $this->add_block(empty($accounts) && empty($others));
-
-        return $args;
-    }
-
-    private function add_block($first)
-    {
-        $preset = new html_select(['name' => '_new[preset]', 'id' => 'mh_preset']);
-        $preset->add($this->gettext('preset_gmail'), 'gmail');
-        $preset->add($this->gettext('preset_privateemail'), 'privateemail');
-        $preset->add($this->gettext('preset_other'), 'other');
-
-        $field = function ($key, $attrs = []) {
-            return new html_inputfield($attrs + ['name' => "_new[$key]", 'id' => "mh_new_$key", 'size' => 40]);
-        };
-        $security = function ($key, $choices) {
-            $s = new html_select(['name' => "_new[$key]", 'id' => "mh_new_$key", 'class' => 'mh-other']);
-            foreach ($choices as $c) {
-                $s->add($this->gettext('sec_' . $c), $c);
-            }
-            return $s;
-        };
-        $label = function ($key, $text) {
-            return html::label("mh_new_$key", rcube::Q($this->gettext($text)));
-        };
-        $pass = new html_passwordfield(['name' => '_new[pass]', 'id' => 'mh_new_pass', 'size' => 40, 'autocomplete' => 'new-password']);
-
-        $other = ['class' => 'mh-other'];
-        $options = [
-            'intro'    => ['title' => '', 'content' => rcube::Q($this->gettext($first ? 'introfirst' : 'intro'))],
-            'preset'   => ['title' => html::label('mh_preset', rcube::Q($this->gettext('provider'))), 'content' => $preset->show('gmail')],
-            'email'    => ['title' => $label('email', 'email'), 'content' => $field('email', ['placeholder' => 'you@example.com'])->show()],
-            'name'     => ['title' => $label('name', 'name'), 'content' => $field('name')->show()],
-            'pass'     => ['title' => $label('pass', 'apppass'), 'content' => $pass->show()],
-            'passhelp' => ['title' => '', 'content' => html::span(['id' => 'mh_passhelp'], rcube::Q($this->gettext('passhelp_gmail')))],
-            'user'     => ['title' => $label('user', 'user'), 'content' => $field('user', $other + ['placeholder' => $this->gettext('userplaceholder')])->show()],
-            'imap_host' => ['title' => $label('imap_host', 'imap_host'), 'content' => $field('imap_host', $other + ['placeholder' => 'imap.example.com'])->show()],
-            'imap_port' => ['title' => $label('imap_port', 'imap_port'), 'content' => $field('imap_port', $other + ['size' => 6])->show('993')
-                . ' ' . $security('imap_security', ['ssl', 'none'])->show('ssl')],
-            'smtp_host' => ['title' => $label('smtp_host', 'smtp_host'), 'content' => $field('smtp_host', $other + ['placeholder' => 'smtp.example.com'])->show()],
-            'smtp_port' => ['title' => $label('smtp_port', 'smtp_port'), 'content' => $field('smtp_port', $other + ['size' => 6])->show('465')
-                . ' ' . $security('smtp_security', ['ssl', 'tls', 'none'])->show('ssl')],
-        ];
-
-        // Show the server fields only for "Other provider", and the matching
-        // app-password help for each preset.
-        $checking = json_encode($this->gettext('checking'));
-        $help = json_encode([
+        $this->register_handler('plugin.body', [$this, 'render']);
+        $this->include_script('mailhub_accounts.js');
+        $rcmail->output->set_env('mh_help', [
             'gmail' => $this->gettext('passhelp_gmail'),
             'privateemail' => $this->gettext('passhelp_privateemail'),
             'other' => $this->gettext('passhelp_other'),
         ]);
-        rcmail::get_instance()->output->add_script(
-            "var mh_help = $help, mh_toggle = function() {"
-            . " var p = $('#mh_preset').val();"
-            . " $('.mh-other').closest('tr, .form-group, .row').toggle(p == 'other');"
-            . " $('#mh_passhelp').text(mh_help[p]); };"
-            . " $('#mh_preset').on('change', mh_toggle); mh_toggle();"
-            // Saving a new account (or a new password) logs in to the provider's
-            // IMAP and SMTP first, which takes a few seconds: say so, and keep the
-            // Save button from being pressed twice meanwhile.
-            . " rcmail.addEventListener('beforesave', function() {"
-            . "   var testing = $.trim($('#mh_new_email').val()) !== ''"
-            . "     || $('input[type=password]').filter(function() { return this.value !== ''; }).length > 0;"
-            . "   rcmail.display_message(testing ? $checking : rcmail.get_label('saving'), 'loading', 60000);"
-            . "   $('button.mainaction, .formbuttons button').prop('disabled', true);"
-            . " });",
-            'docready'
-        );
-
-        return ['name' => rcube::Q($this->gettext('add')), 'options' => $options];
+        $rcmail->output->set_pagetitle($this->gettext('section'));
+        $rcmail->output->send('plugin');
     }
 
-    // ---------------------------------------------------------------- save ---
-
-    public function prefs_save($args)
+    public function render()
     {
-        if ($args['section'] != self::SECTION) {
-            return $args;
-        }
-
-        $rcmail = rcmail::get_instance();
-        $accounts = (array) $rcmail->config->get(self::PREF, []);
-        $smtp = (array) $rcmail->config->get('identity_smtp', []);
-        $posted = (array) rcube_utils::get_input_value('_acc', rcube_utils::INPUT_POST, true);
-        $new = (array) rcube_utils::get_input_value('_new', rcube_utils::INPUT_POST, true);
-
+        $accounts = $this->accounts();
         if (!is_writable($this->accounts_dir())) {
-            return $this->refuse($args, $this->gettext('dirnotwritable'));
+            return html::div(['class' => 'mh-page formcontent'],
+                html::p(['class' => 'boxerror'], rcube::Q($this->gettext('dirnotwritable'))));
         }
 
-        // 1. Work out every change and test new logins, before writing anything.
-        $removed = [];
-        $touched = [];  // slug => plain password (null = unchanged)
+        $cards = '';
         foreach ($accounts as $slug => $a) {
-            $in = $posted[$slug] ?? null;
-            if (!is_array($in)) {
-                continue;
+            $cards .= $this->card($slug, $a, true);
+        }
+        foreach (array_diff($this->files_on_disk(), array_keys($accounts)) as $slug) {
+            $cards .= $this->card($slug, ['email' => $slug], false);
+        }
+
+        $intro = html::p(['class' => 'mh-intro'], rcube::Q($this->gettext($accounts ? 'intro' : 'introfirst')));
+        $add = html::tag('button', ['type' => 'button', 'class' => 'button mainaction mh-add', 'id' => 'mh-add-btn'],
+            rcube::Q($this->gettext('addbutton')));
+
+        return html::div(['class' => 'mh-page formcontent', 'id' => 'mh-page'],
+            html::tag('h2', ['class' => 'mh-title'], rcube::Q($this->gettext('section')))
+            . $intro
+            . html::div(['id' => 'mh-cards'], $cards ?: html::p(['class' => 'mh-empty'], rcube::Q($this->gettext('noaccounts'))))
+            . html::p(['class' => 'mh-addrow'], $add)
+            . $this->add_form()
+            . html::div(['id' => 'mh-dialog-pass', 'class' => 'mh-dialog', 'style' => 'display:none'],
+                html::label('mh-pass-input', rcube::Q($this->gettext('newpass')))
+                . html::tag('input', ['type' => 'password', 'id' => 'mh-pass-input', 'class' => 'form-control', 'autocomplete' => 'new-password'])
+                . html::p(['class' => 'mh-hint', 'id' => 'mh-pass-help'], ''))
+            . html::div(['id' => 'mh-dialog-name', 'class' => 'mh-dialog', 'style' => 'display:none'],
+                html::label('mh-name-input', rcube::Q($this->gettext('name')))
+                . html::tag('input', ['type' => 'text', 'id' => 'mh-name-input', 'class' => 'form-control'])
+                . html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('namehint'))))
+        );
+    }
+
+    /** One account: who it is, its status, where its mail is, what can be done. */
+    private function card($slug, array $a, $managed)
+    {
+        $st = $this->status($slug);
+        $provider = $managed ? $this->provider_label($a) : $this->gettext('byfile');
+        $where = $this->gettext(['name' => 'where', 'vars' => ['folder' => 'Live › ' . $a['email']]]);
+        if ($managed) {
+            $where .= ' · ' . $this->gettext('receive') . ' ' . $a['imap_host'] . ':' . $a['imap_port']
+                . ' · ' . $this->gettext('send') . ' ' . $a['smtp_host'] . ':' . $a['smtp_port'];
+        }
+        $btn = function ($op, $label, $class = '') {
+            return html::tag('button', ['type' => 'button', 'class' => "button $class", 'data-op' => $op], rcube::Q($this->gettext($label)));
+        };
+        $actions = $btn('syncnow', 'syncnow');
+        if ($managed) {
+            $actions .= $btn('password', 'changepass') . $btn('rename', 'rename') . $btn('remove', 'removebutton', 'delete');
+        }
+
+        return html::div(['class' => 'mh-card', 'data-slug' => $slug, 'data-email' => $a['email'],
+                'data-name' => $a['name'] ?? '', 'data-preset' => $a['preset'] ?? 'other'],
+            html::div(['class' => 'mh-head'],
+                html::span(['class' => 'mh-email'], rcube::Q($a['email']))
+                . html::span(['class' => 'mh-provider'], rcube::Q($provider)))
+            . (($a['name'] ?? '') !== '' ? html::div(['class' => 'mh-name'], rcube::Q($this->gettext('sendsas') . ' ' . $a['name'])) : '')
+            . html::div(['class' => 'mh-status mh-' . $st['state']],
+                html::span(['class' => 'mh-dot'], '') . html::span(['class' => 'mh-status-text'], rcube::Q($st['text'])))
+            . html::div(['class' => 'mh-where'], rcube::Q($where))
+            . html::div(['class' => 'mh-actions'], $actions)
+        );
+    }
+
+    private function add_form()
+    {
+        $preset = new html_select(['name' => 'preset', 'id' => 'mh_preset', 'class' => 'custom-select']);
+        $preset->add($this->gettext('preset_gmail'), 'gmail');
+        $preset->add($this->gettext('preset_privateemail'), 'privateemail');
+        $preset->add($this->gettext('preset_other'), 'other');
+        $row = function ($key, $label, $input, $other = false) {
+            return html::div(['class' => 'mh-row' . ($other ? ' mh-other' : '')],
+                html::label("mh_new_$key", rcube::Q($this->gettext($label))) . $input);
+        };
+        $input = function ($key, $attrs = []) {
+            return html::tag('input', $attrs + ['type' => 'text', 'name' => $key, 'id' => "mh_new_$key", 'class' => 'form-control']);
+        };
+        $sec = function ($key, $choices) {
+            $s = new html_select(['name' => $key, 'id' => "mh_new_$key", 'class' => 'custom-select']);
+            foreach ($choices as $c) {
+                $s->add($this->gettext('sec_' . $c), $c);
             }
-            if (!empty($in['remove'])) {
-                $removed[] = $slug;
-                continue;
-            }
-            $accounts[$slug]['name'] = trim((string) ($in['name'] ?? ''));
-            $pass = self::clean_pass((string) ($in['pass'] ?? ''), $a['preset'] ?? 'other');
-            if ($pass !== '') {
-                if ($error = $this->test_account($accounts[$slug], $pass)) {
-                    return $this->refuse($args, $a['email'] . ': ' . $error);
+            return $s->show('ssl');
+        };
+
+        return html::div(['id' => 'mh-dialog-add', 'class' => 'mh-dialog', 'style' => 'display:none'],
+            $row('preset', 'provider', $preset->show('gmail'))
+            . $row('email', 'email', $input('email', ['placeholder' => 'you@example.com', 'autocomplete' => 'off']))
+            . $row('name', 'name', $input('name'))
+            . $row('pass', 'apppass', $input('pass', ['type' => 'password', 'autocomplete' => 'new-password']))
+            . html::p(['class' => 'mh-hint mh-passhelp'], rcube::Q($this->gettext('passhelp_gmail')))
+            . $row('user', 'user', $input('user', ['placeholder' => $this->gettext('userplaceholder')]), true)
+            . $row('imap_host', 'imap_host', $input('imap_host', ['placeholder' => 'imap.example.com']), true)
+            . $row('imap_port', 'imap_port', $input('imap_port', ['value' => '993', 'size' => 6]) . $sec('imap_security', ['ssl', 'none']), true)
+            . $row('smtp_host', 'smtp_host', $input('smtp_host', ['placeholder' => 'smtp.example.com']), true)
+            . $row('smtp_port', 'smtp_port', $input('smtp_port', ['value' => '465', 'size' => 6]) . $sec('smtp_security', ['ssl', 'tls', 'none']), true)
+            . html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('addhint')))
+        );
+    }
+
+    private function provider_label(array $a)
+    {
+        $p = $a['preset'] ?? 'other';
+        return isset(self::PRESETS[$p]) ? $this->gettext('preset_' . $p) : $a['imap_host'];
+    }
+
+    // ------------------------------------------------------------- actions ---
+
+    /** Add, remove, rename, change password, sync now: each one applied at once. */
+    public function do_action()
+    {
+        $rcmail = rcmail::get_instance();
+        $out = $rcmail->output;
+        $op = rcube_utils::get_input_string('_op', rcube_utils::INPUT_POST);
+        $slug = rcube_utils::get_input_string('_slug', rcube_utils::INPUT_POST);
+        $accounts = $this->accounts();
+        $smtp = (array) $rcmail->config->get('identity_smtp', []);
+
+        $fail = function ($msg) use ($out) {
+            $out->show_message($msg, 'error');
+            $out->send();
+        };
+        if (!is_writable($this->accounts_dir())) {
+            $fail($this->gettext('dirnotwritable'));
+        }
+        if ($op !== 'add' && !isset($accounts[$slug]) && !($op === 'syncnow' && in_array($slug, $this->files_on_disk()))) {
+            $fail($this->gettext('unknownaccount'));
+        }
+
+        switch ($op) {
+            case 'add':
+                $in = (array) rcube_utils::get_input_value('_new', rcube_utils::INPUT_POST, true);
+                $account = $this->new_account($in, $error);
+                if (!$account) {
+                    $fail($error);
+                }
+                $slug = self::slug($account['email']);
+                if (isset($accounts[$slug])) {
+                    $fail($this->gettext('exists'));
+                }
+                $pass = $account['pass'];
+                if ($error = $this->test_account($account, $pass)) {
+                    $fail($error);
+                }
+                $account['pass'] = $rcmail->encrypt($pass);
+                $accounts[$slug] = $account;
+                if (!$this->set_identity($accounts, $smtp, $slug, $pass)) {
+                    $fail($this->gettext('identityfailed'));
+                }
+                $msg = $this->gettext(['name' => 'added', 'vars' => ['email' => $account['email']]]);
+                break;
+
+            case 'password':
+                $a = $accounts[$slug];
+                $pass = self::clean_pass((string) rcube_utils::get_input_value('_pass', rcube_utils::INPUT_POST, true), $a['preset'] ?? 'other');
+                if ($pass === '' || preg_match('/[\r\n]/', $pass)) {
+                    $fail($this->gettext('nopass'));
+                }
+                if ($error = $this->test_account($a, $pass)) {
+                    $fail($error);
                 }
                 $accounts[$slug]['pass'] = $rcmail->encrypt($pass);
-            }
-            $touched[$slug] = $pass !== '' ? $pass : null;
+                if (!$this->set_identity($accounts, $smtp, $slug, $pass)) {
+                    $fail($this->gettext('identityfailed'));
+                }
+                $msg = $this->gettext('passchanged');
+                break;
+
+            case 'rename':
+                $accounts[$slug]['name'] = trim((string) rcube_utils::get_input_value('_name', rcube_utils::INPUT_POST, true));
+                if (!$this->set_identity($accounts, $smtp, $slug, null)) {
+                    $fail($this->gettext('identityfailed'));
+                }
+                $msg = $this->gettext('renamed');
+                break;
+
+            case 'remove':
+                // The identity stays (you can still reply from that address). The
+                // mirror sees the file go, stops and deletes this server's copy only.
+                $email = $accounts[$slug]['email'];
+                unset($accounts[$slug]);
+                @unlink($this->accounts_dir() . "/$slug.json");
+                @unlink($this->accounts_dir() . "/$slug.getmailrc");  // from before the mirror
+                $msg = $this->gettext(['name' => 'removed', 'vars' => ['email' => $email]]);
+                break;
+
+            case 'syncnow':
+                @touch($this->accounts_dir() . '/.sync-now');
+                $out->show_message($this->gettext('syncrequested'), 'confirmation');
+                $out->send();
+                return;
+
+            default:
+                $fail('unknown action');
         }
 
-        if (trim((string) ($new['email'] ?? '')) !== '') {
-            $account = $this->new_account($new, $error);
-            if (!$account) {
-                return $this->refuse($args, $error);
-            }
-            $slug = self::slug($account['email']);
-            if (isset($accounts[$slug]) && !in_array($slug, $removed)) {
-                return $this->refuse($args, $this->gettext('exists'));
-            }
-            $pass = $account['pass'];
-            if ($error = $this->test_account($account, $pass)) {
-                return $this->refuse($args, $error);
-            }
-            $account['pass'] = $rcmail->encrypt($pass);
-            $accounts[$slug] = $account;
-            $removed = array_diff($removed, [$slug]);
-            $touched[$slug] = $pass;
-        }
-
-        // 2. Identities with their SMTP (kept on removal: you can still reply
-        //    from that address; delete the identity itself under Identities).
-        foreach ($touched as $slug => $pass) {
-            $a = $accounts[$slug];
-            $iid = $this->ensure_identity($a['email'], $a['name']);
-            if (!$iid) {
-                return $this->refuse($args, $this->gettext('identityfailed'));
-            }
-            $accounts[$slug]['identity_id'] = $iid;
-            $smtp[$iid] = [
-                'smtp_standard' => false,
-                'smtp_host'     => self::smtp_uri($a),
-                'smtp_user'     => $a['user'],
-                'smtp_pass'     => $pass !== null ? $rcmail->encrypt($pass) : ($smtp[$iid]['smtp_pass'] ?? $a['pass']),
-            ];
-        }
-
-        // 3. Account files, then wake the mirror. A removed account's file goes:
-        //    the mirror stops and deletes this server's copy (never the provider's).
-        foreach ($removed as $slug) {
-            unset($accounts[$slug]);
-            @unlink($this->accounts_dir() . "/$slug.json");
-            @unlink($this->accounts_dir() . "/$slug.getmailrc");  // from before the mirror
-        }
-        foreach ($accounts as $slug => $a) {
-            if (!$this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']))) {
-                return $this->refuse($args, $this->gettext('dirnotwritable'));
+        foreach ($accounts as $s => $a) {
+            if (!$this->write_account($s, $a, (string) $rcmail->decrypt($a['pass']))) {
+                $fail($this->gettext('dirnotwritable'));
             }
         }
         @touch($this->accounts_dir() . '/.sync-now');
+        $rcmail->user->save_prefs([self::PREF => $accounts, 'identity_smtp' => $smtp]);
 
-        $args['prefs'][self::PREF] = $accounts;
-        $args['prefs']['identity_smtp'] = $smtp;
+        $out->show_message($msg, 'confirmation');
+        $out->command('plugin.mh_reload', []);
+        $out->send();
+    }
 
-        return $args;
+    /** The live status of every account, for the page's refresh. */
+    public function status_action()
+    {
+        $rcmail = rcmail::get_instance();
+        $data = [];
+        foreach (array_unique(array_merge(array_keys($this->accounts()), $this->files_on_disk())) as $slug) {
+            $data[$slug] = $this->status($slug);
+        }
+        $rcmail->output->command('plugin.mh_status', $data);
+        $rcmail->output->send();
+    }
+
+    private function accounts()
+    {
+        return (array) rcmail::get_instance()->config->get(self::PREF, []);
+    }
+
+    /**
+     * Write the account's identity and its SMTP (identity_smtp's format). A null
+     * password keeps the stored one.
+     */
+    private function set_identity(array &$accounts, array &$smtp, $slug, $pass)
+    {
+        $rcmail = rcmail::get_instance();
+        $a = $accounts[$slug];
+        $iid = $this->ensure_identity($a['email'], $a['name']);
+        if (!$iid) {
+            return false;
+        }
+        $accounts[$slug]['identity_id'] = $iid;
+        $smtp[$iid] = [
+            'smtp_standard' => false,
+            'smtp_host'     => self::smtp_uri($a),
+            'smtp_user'     => $a['user'],
+            'smtp_pass'     => $pass !== null ? $rcmail->encrypt($pass) : ($smtp[$iid]['smtp_pass'] ?? $a['pass']),
+        ];
+
+        return true;
     }
 
     /**
@@ -346,15 +410,6 @@ class mailhub_accounts extends rcube_plugin
     private static function clean_pass($pass, $preset)
     {
         return $preset === 'gmail' ? str_replace(' ', '', $pass) : $pass;
-    }
-
-    private function refuse($args, $message)
-    {
-        $args['abort'] = true;
-        $args['result'] = false;
-        $args['message'] = $message;
-
-        return $args;
     }
 
     // --------------------------------------------------------------- tests ---
@@ -483,27 +538,32 @@ class mailhub_accounts extends rcube_plugin
         return $ok;
     }
 
-    /** One line about the account's mirror, from the status mailhub-mirror writes. */
-    private function status_text($slug)
+    /**
+     * The account's mirror status for the page: state (ok, running, failed,
+     * waiting), a sentence, and whether the provider refused the password.
+     */
+    private function status($slug)
     {
         $file = $this->state_dir() . "/status/$slug.json";
         $s = is_readable($file) ? json_decode((string) file_get_contents($file), true) : null;
         if (!is_array($s)) {
-            return $this->gettext('waiting');
+            return ['state' => 'waiting', 'text' => $this->gettext('waiting'), 'badlogin' => false];
         }
 
         $when = rcmail::get_instance()->format_date($s['at'] ?? '');
         $last = trim((string) ($s['last'] ?? ''));
+        $n = number_format((int) ($s['messages'] ?? 0));
         if (!empty($s['running'])) {
-            return $this->gettext(['name' => 'syncrunning', 'vars' => ['when' => $when, 'last' => $last]]);
+            $text = $this->gettext(['name' => !empty($s['first']) ? 'st_first' : 'st_syncing', 'vars' => ['n' => $n]]);
+            return ['state' => 'running', 'text' => $text, 'badlogin' => false];
         }
         if (!empty($s['ok'])) {
-            return $this->gettext(['name' => 'fetchok', 'vars' => ['when' => $when, 'last' => $last]]);
+            return ['state' => 'ok', 'text' => $this->gettext(['name' => 'st_ok', 'vars' => ['n' => $n, 'when' => $when]]), 'badlogin' => false];
         }
-        if (preg_match('/AUTHENTICATIONFAILED|invalid credentials|authentication failed|login failed|application-specific password/i', $last)) {
-            $last = $this->gettext('fetchbadlogin');
-        }
+        $bad = (bool) preg_match('/AUTHENTICATIONFAILED|invalid credentials|authentication failed|login failed|application-specific password|LOGIN failed/i', $last);
+        $text = $this->gettext(['name' => 'st_failed', 'vars' => ['when' => $when,
+            'last' => $bad ? $this->gettext('fetchbadlogin') : mb_substr($last, 0, 200)]]);
 
-        return $this->gettext(['name' => 'fetchfailed', 'vars' => ['when' => $when, 'last' => mb_substr($last, 0, 200)]]);
+        return ['state' => 'failed', 'text' => $text, 'badlogin' => $bad];
     }
 }
