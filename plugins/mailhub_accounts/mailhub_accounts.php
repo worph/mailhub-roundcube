@@ -1,17 +1,19 @@
 <?php
 
 /**
- * MailHub: the mail accounts MailHub fetches, managed in Settings → "Mail accounts".
+ * MailHub: the mail accounts MailHub mirrors, managed in Settings → "Mail accounts".
  *
  * One account is two things, written together after testing both logins:
- *   - fetching: a getmail config file (`<accounts dir>/<slug>.getmailrc`), which the
- *     mailhub-fetch container picks up within seconds (it watches the folder);
+ *   - its mirror: an account file (`<accounts dir>/<slug>.json`) that the
+ *     mailhub-mirror container picks up within seconds. It keeps a local copy of the
+ *     whole mailbox under Live/<address>/ (IMAP, pull only) and replays what is done
+ *     there at the provider, which stays the source of truth;
  *   - sending as that address: a Roundcube identity with the provider's SMTP,
  *     stored the way the identity_smtp plugin reads it.
  *
  * Accounts are kept in the user's prefs (password encrypted with Roundcube's DES
- * key) and the getmail files are rendered from them. getmail files this plugin
- * did not write (hand-written ones) are listed read-only, with their status.
+ * key) and the account files are rendered from them. Account files this plugin did
+ * not write are listed read-only, with their status.
  */
 class mailhub_accounts extends rcube_plugin
 {
@@ -91,6 +93,14 @@ class mailhub_accounts extends rcube_plugin
                         'content' => $remove->show('') . ' ' . html::span('hint', rcube::Q($this->gettext('removehint')))],
                 ],
             ];
+        }
+
+        // Accounts saved before the mirror (getmail) get their mirror file here.
+        foreach ($accounts as $slug => $a) {
+            if (!is_file($this->accounts_dir() . "/$slug.json")) {
+                $this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']));
+                @touch($this->accounts_dir() . '/.sync-now');
+            }
         }
 
         $others = array_diff($this->files_on_disk(), array_keys($accounts));
@@ -253,17 +263,19 @@ class mailhub_accounts extends rcube_plugin
             ];
         }
 
-        // 3. getmail files, then wake the fetcher.
+        // 3. Account files, then wake the mirror. A removed account's file goes:
+        //    the mirror stops and deletes this server's copy (never the provider's).
         foreach ($removed as $slug) {
             unset($accounts[$slug]);
-            @unlink($this->accounts_dir() . "/$slug.getmailrc");
+            @unlink($this->accounts_dir() . "/$slug.json");
+            @unlink($this->accounts_dir() . "/$slug.getmailrc");  // from before the mirror
         }
         foreach ($accounts as $slug => $a) {
-            if (!$this->write_getmailrc($slug, $a, (string) $rcmail->decrypt($a['pass']))) {
+            if (!$this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']))) {
                 return $this->refuse($args, $this->gettext('dirnotwritable'));
             }
         }
-        @touch($this->accounts_dir() . '/.fetch-now');
+        @touch($this->accounts_dir() . '/.sync-now');
 
         $args['prefs'][self::PREF] = $accounts;
         $args['prefs']['identity_smtp'] = $smtp;
@@ -289,11 +301,9 @@ class mailhub_accounts extends rcube_plugin
             $error = $this->gettext('nopass');
             return null;
         }
-        // Each account's mail goes to its own folder, named after the address
-        // (no longer a setting; an existing account keeps the folder it has).
-        $folder = self::clean_folder($email);
-        if ($folder === null) {
-            $error = $this->gettext('badfolder');
+        // The address names its folder tree, Live/<address>/: no slash or quote.
+        if (preg_match('#[/"\\\\]#', $email)) {
+            $error = $this->gettext('bademail');
             return null;
         }
         if (preg_match('/[\r\n]/', $pass)) {
@@ -330,43 +340,9 @@ class mailhub_accounts extends rcube_plugin
             'name'   => trim((string) ($in['name'] ?? '')),
             'user'   => $user,
             'pass'   => $pass,
-            'folder' => $folder,
         ];
     }
 
-    /**
-     * The folder an account's mail is delivered to: '' for the Inbox, else a
-     * name Dovecot creates on first delivery — by default the address itself
-     * (pierre.henri@aptero.co). It travels in the LMTP recipient's quoted local
-     * part (see lmtp_recipient), which takes anything but a quote, a backslash or
-     * a control character; "/" would nest folders, and the LMTP address is ASCII.
-     * Null when invalid.
-     */
-    private static function clean_folder($folder)
-    {
-        $folder = trim($folder);
-        if ($folder === '' || strcasecmp($folder, 'INBOX') == 0) {
-            return '';
-        }
-        return preg_match('/^[A-Za-z0-9][A-Za-z0-9 ._@+-]{0,63}$/', $folder) ? $folder : null;
-    }
-
-    /**
-     * The address getmail delivers an account's mail to over LMTP. With a folder
-     * it is "admin+<folder>"@mailhub: Dovecot files mail for user+detail into the
-     * detail's folder (lmtp_save_to_detail_mailbox), the quotes let the folder
-     * carry an @, and the domain — which Dovecot drops (auth_username_format) —
-     * is what the split happens on.
-     */
-    private static function lmtp_recipient($user, $folder)
-    {
-        return $folder === '' ? $user : '"' . $user . '+' . $folder . '"@mailhub';
-    }
-
-    /**
-     * Gmail shows app passwords in groups of four ("abcd efgh ijkl mnop"); the
-     * spaces are not part of them.
-     */
     private static function clean_pass($pass, $preset)
     {
         return $preset === 'gmail' ? str_replace(' ', '', $pass) : $pass;
@@ -457,7 +433,7 @@ class mailhub_accounts extends rcube_plugin
         return (int) $user->insert_identity(['email' => $email, 'name' => $name, 'standard' => 0]);
     }
 
-    // ------------------------------------------------------------- getmail ---
+    // -------------------------------------------------------------- mirror ---
 
     private function accounts_dir()
     {
@@ -466,7 +442,7 @@ class mailhub_accounts extends rcube_plugin
 
     private function state_dir()
     {
-        return rtrim(rcmail::get_instance()->config->get('mailhub_fetch_state_dir', '/var/mailhub/fetch'), '/');
+        return rtrim(rcmail::get_instance()->config->get('mailhub_mirror_state_dir', '/var/mailhub/mirror'), '/');
     }
 
     private static function slug($email)
@@ -474,57 +450,40 @@ class mailhub_accounts extends rcube_plugin
         return preg_replace('/[^a-z0-9._-]/', '_', str_replace('@', '_at_', strtolower($email)));
     }
 
-    /** Account names of every getmail file in the folder. */
+    /** Account names of every account file in the folder. */
     private function files_on_disk()
     {
         $names = [];
-        foreach (glob($this->accounts_dir() . '/*.getmailrc') ?: [] as $f) {
-            $names[] = basename($f, '.getmailrc');
+        foreach (glob($this->accounts_dir() . '/*.json') ?: [] as $f) {
+            $names[] = basename($f, '.json');
         }
 
         return $names;
     }
 
-    private function write_getmailrc($slug, array $a, $pass)
+    /** The account file mailhub-mirror reads (private: it holds the password). */
+    private function write_account($slug, array $a, $pass)
     {
-        $rcmail = rcmail::get_instance();
-        $lmtp_user = $rcmail->config->get('mailhub_lmtp_user') ?: $rcmail->user->get_username();
-        $lines = [
-            '# Written by MailHub (Settings → Mail accounts). Changes made here are overwritten.',
-            '[retriever]',
-            'type = ' . ($a['imap_security'] === 'ssl' ? 'SimpleIMAPSSLRetriever' : 'SimpleIMAPRetriever'),
-            'server = ' . $a['imap_host'],
-            'port = ' . (int) $a['imap_port'],
-            'username = ' . $a['user'],
-            'password = ' . $pass,
-            'mailboxes = ("INBOX",)',
-            '',
-            '[destination]',
-            'type = MDA_lmtp',
-            'host = ' . $rcmail->config->get('mailhub_lmtp_host', 'mailhub-imap'),
-            'port = ' . (int) $rcmail->config->get('mailhub_lmtp_port', 2424),
-            'override = ' . self::lmtp_recipient($lmtp_user, $a['folder'] ?? ''),
-            '',
-            '[options]',
-            'read_all = false',
-            // IMAP only, and the provider's copy is never touched (the fetch loop
-            // also runs getmail with --dont-delete, for files written by hand).
-            'delete = false',
-            'received = false',
-            'delivered_to = false',
-            '',
+        $data = [
+            'email'         => $a['email'],
+            'user'          => $a['user'],
+            'pass'          => $pass,
+            'imap_host'     => $a['imap_host'],
+            'imap_port'     => (int) $a['imap_port'],
+            'imap_security' => $a['imap_security'],
+            'preset'        => $a['preset'] ?? 'other',
         ];
-
-        $file = $this->accounts_dir() . "/$slug.getmailrc";
+        $file = $this->accounts_dir() . "/$slug.json";
         $tmp = $this->accounts_dir() . "/.$slug.tmp";
         $old = umask(0077);
-        $ok = file_put_contents($tmp, implode("\n", $lines)) !== false && rename($tmp, $file);
+        $ok = file_put_contents($tmp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n") !== false
+            && rename($tmp, $file);
         umask($old);
 
         return $ok;
     }
 
-    /** One line about the account's last fetch, from the status getmail writes. */
+    /** One line about the account's mirror, from the status mailhub-mirror writes. */
     private function status_text($slug)
     {
         $file = $this->state_dir() . "/status/$slug.json";
@@ -535,6 +494,9 @@ class mailhub_accounts extends rcube_plugin
 
         $when = rcmail::get_instance()->format_date($s['at'] ?? '');
         $last = trim((string) ($s['last'] ?? ''));
+        if (!empty($s['running'])) {
+            return $this->gettext(['name' => 'syncrunning', 'vars' => ['when' => $when, 'last' => $last]]);
+        }
         if (!empty($s['ok'])) {
             return $this->gettext(['name' => 'fetchok', 'vars' => ['when' => $when, 'last' => $last]]);
         }
