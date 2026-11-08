@@ -54,7 +54,9 @@ window.rcmail && rcmail.addEventListener('init', function () {
     $('#mh-add-btn').on('click', function () {
         dialog('mh-dialog-add', L('addtitle'), L('addok'), function (form) {
             var data = {};
-            form.find('input, select').each(function () { data['_new[' + this.name + ']'] = $(this).val(); });
+            form.find('input, select').each(function () {
+                data['_new[' + this.name + ']'] = this.type == 'checkbox' ? (this.checked ? '1' : '0') : $(this).val();
+            });
             act('add', data, 'mailhub_accounts.checking');
         }, function (form) {
             form.find('[name=preset]').on('change', function () { toggleOther(form); });
@@ -68,6 +70,10 @@ window.rcmail && rcmail.addEventListener('init', function () {
         switch ($(this).data('op')) {
             case 'syncnow':
                 act('syncnow', {_slug: slug});
+                break;
+            case 'merge':
+            case 'unmerge':
+                act($(this).data('op'), {_slug: slug});
                 break;
             case 'password':
                 dialog('mh-dialog-pass', L('changepasstitle', {email: email}), rcmail.get_label('save'), function (form) {

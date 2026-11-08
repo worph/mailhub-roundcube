@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Full-bleed for Android adaptive icons / iOS: the launcher applies its own
+       shape, so the content stays inside the central safe circle (r = 40%). -->
+  <rect width="192" height="192" fill="#2563EB"/>
+  <g transform="translate(96 96) scale(.85) translate(-104 -88)">
+    <rect x="40" y="58" width="113" height="77" rx="7" fill="#fff"/>
+    <path d="M46 66 L96 104 L146 66" fill="none" stroke="#2563EB" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="150" cy="58.5" r="18" fill="#F59E0B"/>
+  </g>
+</svg>
