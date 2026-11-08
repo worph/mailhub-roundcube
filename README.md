@@ -2,7 +2,7 @@
 
 `ghcr.io/worph/mailhub-roundcube`: the webmail of the Yundera store's **MailHub** app. Roundcube + Kolab
 calendar and address book plugins (CalDAV / CardDAV drivers) + identity_smtp (send through each identity's
-own provider) + our `mailhub_dav` and `mailhub_accounts` plugins + 11 skins.
+own provider) + our `mailhub_dav`, `mailhub_accounts` and `mailhub_branding` plugins + 11 skins.
 
 The app itself (compose, seeded config, setup scripts, rationale) lives in the store: `Yundera/AppStore` →
 `Apps/MailHub`. The other MailHub images (mirror, MCP server) and the test kit (`dev/`, including
@@ -33,6 +33,14 @@ image was built up to 0.4.0 (history kept here).
   the IMAP and SMTP logins are tested, then the mirror account file (`<slug>.json`, 0600) and the identity with
   the provider's SMTP (identity_smtp's format) are written. Settings: `mailhub_accounts_dir`
   (`/var/mailhub/accounts`), `mailhub_mirror_state_dir` (`/var/mailhub/mirror`).
+- **`plugins/mailhub_branding/`**: the MailHub icon as logo (light, dark, small screens) and favicon in every
+  skin, through Roundcube's `skin_logo` (left alone if the config sets one), plus a web app manifest, Apple
+  touch icon and app name in every page's head, so *Install app* / *Add to Home screen* on a phone gives
+  MailHub's icon. The PNGs and `favicon.ico` are rendered from `icons/icon.svg` (rounded square) and
+  `icons/maskable.svg` (full bleed, for Android's adaptive shapes and iOS). The manifest is `manifest.json`
+  because `static.php` doesn't serve `.webmanifest`; its URLs are relative (`../../../../` is the
+  install root, seen from `static.php/plugins/mailhub_branding/icons/`). Elastic2022 appends its own
+  manifest (Roundcube's icons) from `ui.js`; browsers use the first one in the page, ours.
 - **Skins**: 11 to choose from in *Settings → User interface*, the app's default being
   [Elastic2022](https://github.com/seb1k/Elastic2022): Roundcube's Elastic,
   [Workbench](https://github.com/AR-Sebastian/roundcube-skin-workbench),
