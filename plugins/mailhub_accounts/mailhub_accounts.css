@@ -1,0 +1,50 @@
+/* MailHub: Settings → Mail accounts. Colours lean on the skin's own variables
+   where it has them, so the page follows light and dark modes. */
+
+/* the Settings menu entry (Elastic-family skins draw icons with Font Awesome) */
+#settings-menu li.mailhub-accounts a:before,
+#settings-menu .mailhub-accounts > a:before {
+    content: "\f0e0";
+}
+
+.mh-page { max-width: 54rem; padding: 1rem 1.5rem 2rem; }
+.mh-title { font-size: 1.3rem; margin: .25rem 0 .5rem; }
+.mh-intro, .mh-empty { color: #737677; margin: 0 0 1.25rem; line-height: 1.45; }
+.mh-addrow { margin: 1.25rem 0 0; }
+
+.mh-card {
+    border: 1px solid rgba(127, 127, 127, .3);
+    border-radius: 8px;
+    padding: .9rem 1.1rem;
+    margin-bottom: .9rem;
+}
+.mh-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; justify-content: space-between; }
+.mh-email { font-weight: 600; font-size: 1.05rem; word-break: break-all; }
+.mh-provider, .mh-name, .mh-where { color: #737677; font-size: .9rem; }
+.mh-name { margin-top: .15rem; }
+.mh-where { margin-top: .35rem; word-break: break-word; }
+
+.mh-status { display: flex; align-items: center; gap: .5rem; margin-top: .6rem; }
+.mh-dot { flex: none; width: .65rem; height: .65rem; border-radius: 50%; background: #9aa0a6; }
+.mh-ok .mh-dot { background: #2e9e44; }
+.mh-running .mh-dot { background: #37a0ff; animation: mh-pulse 1.6s ease-in-out infinite; }
+.mh-failed .mh-dot { background: #d9363e; }
+.mh-failed .mh-status-text { color: #d9363e; }
+@keyframes mh-pulse { 50% { opacity: .35; } }
+
+.mh-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+.mh-actions .button { margin: 0; }
+.mh-actions .button.delete { margin-left: auto; }
+.mh-badlogin .mh-actions [data-op=password] { border-color: #d9363e; color: #d9363e; }
+
+/* dialogs: the forms are kept in the page (display: none) and shown as copies */
+.mh-dialog .mh-row { margin-bottom: .7rem; }
+.mh-dialog .mh-row label { display: block; margin-bottom: .2rem; font-weight: 500; }
+.mh-dialog .mh-row input[size] { display: inline-block; width: 7rem; margin-right: .5rem; }
+.mh-dialog .mh-row select + select, .mh-dialog .mh-row input + select { display: inline-block; width: auto; }
+.mh-dialog .mh-hint, .mh-hint { color: #737677; font-size: .875rem; margin: .4rem 0 .8rem; line-height: 1.4; }
+
+@media (max-width: 480px) {
+    .mh-page { padding: .75rem; }
+    .mh-actions .button.delete { margin-left: 0; }
+}
