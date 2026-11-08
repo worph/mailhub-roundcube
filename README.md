@@ -46,7 +46,10 @@ image was built up to 0.4.0 (history kept here).
   (over the user's Special folders setting), so Delete moves a message there (into the local Trash: the mirror's
   views save there), deleting inside Trash or *Empty* deletes for good (at the provider too, for an account's own
   Trash). The local INBOX, Trash and Junk are not listed (their mail shows in the merged ones; still reachable as
-  `?_mbox=INBOX`). Does nothing until the merged folders exist (mailhub-mirror 0.4.3+). Needs to be in the app's
+  `?_mbox=INBOX`). Under `Live`, each account lists its INBOX first, and each account (and any folder in it with subfolders)
+  starts collapsed the first time it is listed (`mailhub_folders_seen` pref); then Roundcube remembers what is
+  opened or closed. A container folder (`Live`, an address) opens or closes when its name is clicked.
+  Does nothing until the merged folders exist (mailhub-mirror 0.4.3+). Needs to be in the app's
   `ROUNDCUBEMAIL_PLUGINS`.
 - **Skins**: 11 to choose from in *Settings → User interface*, the app's default being
   [Elastic2022](https://github.com/seb1k/Elastic2022): Roundcube's Elastic,

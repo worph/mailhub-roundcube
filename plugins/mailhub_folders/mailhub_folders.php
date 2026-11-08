@@ -13,6 +13,12 @@
  *   - the local INBOX, Trash and Junk are not listed: what they hold shows in the
  *     merged ones. They stay reachable by URL (?_mbox=INBOX).
  *
+ * And under Live/: each account lists its INBOX first; each account and every
+ * folder in it with subfolders starts collapsed (the first time it is listed,
+ * remembered in `mailhub_folders_seen`; then Roundcube keeps what the user opens
+ * or closes); a folder that is only a container (Live, an address) opens or
+ * closes when its name is clicked, not only its arrow.
+ *
  * Nothing changes while the merged folders do not exist yet (an older mirror).
  */
 class mailhub_folders extends rcube_plugin
@@ -29,6 +35,7 @@ class mailhub_folders extends rcube_plugin
     {
         $this->add_hook('startup', [$this, 'startup']);
         $this->add_hook('render_mailboxlist', [$this, 'render_mailboxlist']);
+        $this->include_script('mailhub_folders.js');
     }
 
     /**
@@ -78,9 +85,15 @@ class mailhub_folders extends rcube_plugin
         return $args;
     }
 
-    /** Merged/All inboxes first, as "Inbox"; the local INBOX, Trash and Junk left out. */
+    /**
+     * Merged/All inboxes first, as "Inbox"; the local INBOX, Trash and Junk left
+     * out; under Live, INBOX first and new folders with subfolders collapsed.
+     */
     public function render_mailboxlist($args)
     {
+        if (isset($args['list']['Live']['folders'])) {
+            $this->live_accounts($args['list']['Live']['folders']);
+        }
         if (!$this->active()) {
             return $args;
         }
@@ -102,5 +115,52 @@ class mailhub_folders extends rcube_plugin
         $args['list'] = [$child => $inbox] + $list;
 
         return $args;
+    }
+
+    /** Each account: INBOX first; it and its folders with subfolders collapsed the first time. */
+    private function live_accounts(array &$accounts)
+    {
+        $parents = [];
+        foreach ($accounts as &$account) {
+            if (empty($account['folders'])) {
+                continue;
+            }
+            if (isset($account['folders']['INBOX'])) {
+                $account['folders'] = ['INBOX' => $account['folders']['INBOX']] + $account['folders'];
+            }
+            $parents[] = $account['id'];
+            $this->parents($account['folders'], $parents);
+        }
+        unset($account);
+
+        $rcmail = rcmail::get_instance();
+        $seen = (array) $rcmail->config->get('mailhub_folders_seen', []);
+        $new = array_diff($parents, $seen);
+        if (!$new) {
+            return;
+        }
+        $collapsed = (string) $rcmail->config->get('collapsed_folders');
+        foreach ($new as $id) {
+            $mark = '&' . rawurlencode($id) . '&';
+            if (!str_contains($collapsed, $mark)) {
+                $collapsed .= $mark;
+            }
+        }
+        // only folders that still exist: a removed account is forgotten
+        $prefs = ['collapsed_folders' => $collapsed, 'mailhub_folders_seen' => array_values(array_intersect(array_merge($seen, $new), $parents))];
+        $rcmail->user->save_prefs($prefs);
+        foreach ($prefs as $k => $v) {
+            $rcmail->config->set($k, $v);
+        }
+    }
+
+    private function parents(array $folders, array &$out)
+    {
+        foreach ($folders as $f) {
+            if (!empty($f['folders'])) {
+                $out[] = $f['id'];
+                $this->parents($f['folders'], $out);
+            }
+        }
     }
 }
