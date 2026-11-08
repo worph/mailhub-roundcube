@@ -41,6 +41,13 @@ image was built up to 0.4.0 (history kept here).
   because `static.php` doesn't serve `.webmanifest`; its URLs are relative (`../../../../` is the
   install root, seen from `static.php/plugins/mailhub_branding/icons/`). Elastic2022 appends its own
   manifest (Roundcube's icons) from `ui.js`; browsers use the first one in the page, ours.
+- **`plugins/mailhub_folders/`**: the merged folders are the main ones. The mail view opens on
+  `Merged/All inboxes`, listed first as *Inbox*; `Merged/Trash` and `Merged/Junk` are Roundcube's Trash and Junk
+  (over the user's Special folders setting), so Delete moves a message there (into the local Trash: the mirror's
+  views save there), deleting inside Trash or *Empty* deletes for good (at the provider too, for an account's own
+  Trash). The local INBOX, Trash and Junk are not listed (their mail shows in the merged ones; still reachable as
+  `?_mbox=INBOX`). Does nothing until the merged folders exist (mailhub-mirror 0.4.3+). Needs to be in the app's
+  `ROUNDCUBEMAIL_PLUGINS`.
 - **Skins**: 11 to choose from in *Settings → User interface*, the app's default being
   [Elastic2022](https://github.com/seb1k/Elastic2022): Roundcube's Elastic,
   [Workbench](https://github.com/AR-Sebastian/roundcube-skin-workbench),
