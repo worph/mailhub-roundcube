@@ -27,7 +27,9 @@ image was built up to 0.4.0 (history kept here).
   Identities). One card per account with its live status (refreshed every 15 s: first download count, up to
   date, or the provider's error) and buttons applied at once: *Sync now*, *Change password*, *Rename*, *Remove…*
   (confirmation; the mirror stops and deletes this server's copy, nothing is deleted at the provider, the
-  identity stays). *Add an account* opens a dialog: Gmail, Namecheap Private Email or any IMAP/SMTP provider;
+  identity stays). *Keep out of Merged* / *Show in Merged* leaves an account out of `Merged › All inboxes`,
+  `Unread` and `Flagged` (`"in_views": false` in its file; mailhub-mirror 0.4.1+), for an address that gets
+  mostly spam: still mirrored, read in its own `Live › <address>` folders. *Add an account* opens a dialog: Gmail, Namecheap Private Email or any IMAP/SMTP provider;
   the IMAP and SMTP logins are tested, then the mirror account file (`<slug>.json`, 0600) and the identity with
   the provider's SMTP (identity_smtp's format) are written. Settings: `mailhub_accounts_dir`
   (`/var/mailhub/accounts`), `mailhub_mirror_state_dir` (`/var/mailhub/mirror`).

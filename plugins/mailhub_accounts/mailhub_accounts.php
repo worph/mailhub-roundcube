@@ -11,6 +11,10 @@
  *   - sending as that address: a Roundcube identity with the provider's SMTP,
  *     stored the way the identity_smtp plugin reads it.
  *
+ * An account can be kept out of Merged › All inboxes, Unread and Flagged
+ * ("in_views": false in its file), e.g. an address that gets mostly spam: it is
+ * still mirrored, and read in its own Live › <address> folders.
+ *
  * Accounts are kept in the user's prefs (password encrypted with Roundcube's DES
  * key) and the account files are rendered from them. Account files this plugin did
  * not write are listed read-only, with their status.
@@ -137,6 +141,10 @@ class mailhub_accounts extends rcube_plugin
         $st = $this->status($slug);
         $provider = $managed ? $this->provider_label($a) : $this->gettext('byfile');
         $where = $this->gettext(['name' => 'where', 'vars' => ['folder' => 'Live › ' . $a['email']]]);
+        $merged = ($a['in_views'] ?? true) !== false;
+        if ($managed && !$merged) {
+            $where .= ' · ' . $this->gettext('notmerged');
+        }
         if ($managed) {
             $where .= ' · ' . $this->gettext('receive') . ' ' . $a['imap_host'] . ':' . $a['imap_port']
                 . ' · ' . $this->gettext('send') . ' ' . $a['smtp_host'] . ':' . $a['smtp_port'];
@@ -146,7 +154,8 @@ class mailhub_accounts extends rcube_plugin
         };
         $actions = $btn('syncnow', 'syncnow');
         if ($managed) {
-            $actions .= $btn('password', 'changepass') . $btn('rename', 'rename') . $btn('remove', 'removebutton', 'delete');
+            $actions .= $btn($merged ? 'unmerge' : 'merge', $merged ? 'unmerge' : 'merge')
+                . $btn('password', 'changepass') . $btn('rename', 'rename') . $btn('remove', 'removebutton', 'delete');
         }
 
         return html::div(['class' => 'mh-card', 'data-slug' => $slug, 'data-email' => $a['email'],
@@ -187,6 +196,9 @@ class mailhub_accounts extends rcube_plugin
             $row('preset', 'provider', $preset->show('gmail'))
             . $row('email', 'email', $input('email', ['placeholder' => 'you@example.com', 'autocomplete' => 'off']))
             . $row('name', 'name', $input('name'))
+            . html::div(['class' => 'mh-row mh-check'],
+                html::tag('input', ['type' => 'checkbox', 'name' => 'in_views', 'id' => 'mh_new_in_views', 'value' => '1', 'checked' => 'checked'])
+                . html::label('mh_new_in_views', rcube::Q($this->gettext('inviews'))))
             . $row('pass', 'apppass', $input('pass', ['type' => 'password', 'autocomplete' => 'new-password']))
             . html::p(['class' => 'mh-hint mh-passhelp'], rcube::Q($this->gettext('passhelp_gmail')))
             . $row('user', 'user', $input('user', ['placeholder' => $this->gettext('userplaceholder')]), true)
@@ -282,6 +294,13 @@ class mailhub_accounts extends rcube_plugin
                 @unlink($this->accounts_dir() . "/$slug.json");
                 @unlink($this->accounts_dir() . "/$slug.getmailrc");  // from before the mirror
                 $msg = $this->gettext(['name' => 'removed', 'vars' => ['email' => $email]]);
+                break;
+
+            case 'merge':
+            case 'unmerge':
+                // Only the views change: the mirror rewrites them, nothing is synced again.
+                $accounts[$slug]['in_views'] = $op === 'merge';
+                $msg = $this->gettext($op === 'merge' ? 'merged' : 'unmerged');
                 break;
 
             case 'syncnow':
@@ -402,6 +421,7 @@ class mailhub_accounts extends rcube_plugin
             'preset' => $preset,
             'email'  => $email,
             'name'   => trim((string) ($in['name'] ?? '')),
+            'in_views' => ($in['in_views'] ?? '1') !== '0',
             'user'   => $user,
             'pass'   => $pass,
         ];
@@ -527,6 +547,7 @@ class mailhub_accounts extends rcube_plugin
             'imap_port'     => (int) $a['imap_port'],
             'imap_security' => $a['imap_security'],
             'preset'        => $a['preset'] ?? 'other',
+            'in_views'      => ($a['in_views'] ?? true) !== false,
         ];
         $file = $this->accounts_dir() . "/$slug.json";
         $tmp = $this->accounts_dir() . "/.$slug.tmp";
