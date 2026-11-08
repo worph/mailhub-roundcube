@@ -1,0 +1,17 @@
+identity_smtp only loads on mail|settings, but invitation replies are sent from
+the calendar task: without this they leave through the global SMTP instead of
+the identity's provider (SPF/DMARC fail). Worth proposing upstream.
+
+diff --git a/identity_smtp/identity_smtp.php b/identity_smtp/identity_smtp.php
+index 109d95a..9e32e5a 100644
+--- a/identity_smtp/identity_smtp.php
++++ b/identity_smtp/identity_smtp.php
+@@ -15,7 +15,7 @@
+ 
+ class identity_smtp extends rcube_plugin
+ {
+-    public $task = 'mail|settings';
++    public $task = 'mail|settings|calendar';
+     private $from_identity;
+ 
+     function init()

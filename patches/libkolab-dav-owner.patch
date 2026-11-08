@@ -1,0 +1,27 @@
+libkolab decides "my calendar" vs "someone else's" by comparing the DAV owner with
+the IMAP login. With an external DAV server whose account has another name, every
+calendar looked shared and invitations had nowhere to be saved. mailhub_dav sets
+kolab_dav_owner to the connected DAV user. Worth proposing upstream (Kolab).
+
+diff --git a/libkolab/lib/kolab_storage_dav_folder.php b/libkolab/lib/kolab_storage_dav_folder.php
+index cd511b7..44526be 100644
+--- a/libkolab/lib/kolab_storage_dav_folder.php
++++ b/libkolab/lib/kolab_storage_dav_folder.php
+@@ -119,7 +119,7 @@ class kolab_storage_dav_folder extends kolab_storage_folder
+             $this->owner = rawurldecode(end($path));
+         } else {
+             $rcube = rcube::get_instance();
+-            $this->owner = $rcube->get_user_name();
++            $this->owner = $rcube->config->get("kolab_dav_owner") ?: $rcube->get_user_name();
+         }
+ 
+         return $this->owner;
+@@ -150,7 +150,7 @@ class kolab_storage_dav_folder extends kolab_storage_folder
+         // TODO: Support for global shared folders?
+ 
+         $owner = $this->get_owner();
+-        $user = rcube::get_instance()->get_user_name();
++        $user = rcube::get_instance()->config->get("kolab_dav_owner") ?: rcube::get_instance()->get_user_name();
+ 
+         if ($owner != $user) {
+             return 'other';
