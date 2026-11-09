@@ -51,6 +51,17 @@ image was built up to 0.4.0 (history kept here).
   opened or closed. A container folder (`Live`, an address) opens or closes when its name is clicked.
   Does nothing until the merged folders exist (mailhub-mirror 0.4.3+). Needs to be in the app's
   `ROUNDCUBEMAIL_PLUGINS`.
+- **`plugins/mailhub_archive/`**: *Archive*, as on Gmail, next to Delete: in the toolbar (Elastic2022 shows it beside
+  Delete when messages are selected, and in the message header), in the full-page message view, and on each row of
+  the list in the flag's place on hover (a set flag still shows; flagging stays in the *Mark* menu). A message goes
+  into the IMAP Archive folder of its own account, `Live/<address>/Archive` (or `Archives`, whichever the account
+  already has; created when it has neither, and the mirror creates it at the provider too), so the provider sees it
+  archived. In `Merged/All inboxes` each message's real folder is asked of Dovecot (`FETCH X-MAILBOX`); a message of
+  the local mailbox goes to the local `Archive`. Disabled inside an archive folder. Replaces Roundcube's `archive`
+  plugin, which archives into a single folder: leave that one out of `ROUNDCUBEMAIL_PLUGINS`. Also registers
+  `plugin.archive` and sets `env.archive_folder`, which is what skins look for. `mailhub_folders` makes
+  `Merged/Archive` (mailhub-mirror 0.4.5+) the Archive special folder: listed with Trash and Junk, the local
+  `Archive` hidden.
 - **Skins**: 11 to choose from in *Settings → User interface*, the app's default being
   [Elastic2022](https://github.com/seb1k/Elastic2022): Roundcube's Elastic,
   [Workbench](https://github.com/AR-Sebastian/roundcube-skin-workbench),

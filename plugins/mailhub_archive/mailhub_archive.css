@@ -1,0 +1,31 @@
+/* MailHub: the row's Archive button takes the flag's place on hover (Elastic2022:
+   right of its Delete icon, in the same style). A set flag still shows when the
+   row is not hovered; flagging stays in the Mark menu. Font Awesome's box-archive,
+   from the Elastic family's "Icons" font (every skin shipped extends or copies
+   Elastic). */
+.messagelist span.mh-archive {
+    display: none;
+    cursor: pointer;
+}
+.messagelist span.mh-archive:before {
+    content: "\f187";
+    font-family: 'Icons';
+    font-weight: 900;
+    font-style: normal;
+    font-size: 14px;
+    display: block;
+    width: 1.18em;
+    margin: 0 .25rem 0 0;
+    text-align: center;
+    opacity: .5;
+}
+.messagelist span.mh-archive:hover:before {
+    opacity: 1;
+}
+.messagelist tr.mh-archivable span.unflagged,
+.messagelist tr.mh-archivable:hover span.flagged {
+    display: none;
+}
+.messagelist tr.mh-archivable:hover span.mh-archive {
+    display: block;
+}
