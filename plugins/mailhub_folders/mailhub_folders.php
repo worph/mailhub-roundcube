@@ -10,8 +10,11 @@
  *   - Merged/Trash and Merged/Junk are Roundcube's Trash and Junk: Delete moves a
  *     message there (into the local Trash, as before), deleting inside it or Empty
  *     deletes for good, at the provider too for an account's own Trash;
- *   - the local INBOX, Trash and Junk are not listed: what they hold shows in the
- *     merged ones. They stay reachable by URL (?_mbox=INBOX).
+ *   - Merged/Archive (mailhub-mirror 0.4.5+: every account's Archive folder plus the
+ *     local one) is the Archive special folder, listed with Trash and Junk; the
+ *     mailhub_archive plugin archives into each account's own Archive folder;
+ *   - the local INBOX, Trash, Junk and Archive are not listed: what they hold shows
+ *     in the merged ones. They stay reachable by URL (?_mbox=INBOX).
  *
  * And under Live/: each account lists its INBOX first; each account and every
  * folder in it with subfolders starts collapsed (the first time it is listed,
@@ -28,11 +31,16 @@ class mailhub_folders extends rcube_plugin
     private const INBOX = 'Merged/All inboxes';
     private const SPECIAL = ['trash' => 'Merged/Trash', 'junk' => 'Merged/Junk'];
     private const HIDDEN = ['INBOX', 'Trash', 'Junk'];
+    private const ARCHIVE = 'Merged/Archive';
 
     private $active = null;
 
     public function init()
     {
+        // Archive as a special folder type (the archive plugin does the same)
+        if (!in_array('archive', rcube_storage::$folder_types)) {
+            rcube_storage::$folder_types[] = 'archive';
+        }
         $this->add_hook('startup', [$this, 'startup']);
         $this->add_hook('render_mailboxlist', [$this, 'render_mailboxlist']);
         $this->include_script('mailhub_folders.js');
@@ -60,6 +68,18 @@ class mailhub_folders extends rcube_plugin
         return $this->active;
     }
 
+    /** Whether the mirror makes Merged/Archive (0.4.5+); remembered once it does. */
+    private function archive_view()
+    {
+        if (empty($_SESSION['mailhub_archive_view'])
+            && rcmail::get_instance()->get_storage()->folder_exists(self::ARCHIVE)
+        ) {
+            $_SESSION['mailhub_archive_view'] = true;
+        }
+
+        return !empty($_SESSION['mailhub_archive_view']);
+    }
+
     public function startup($args)
     {
         $rcmail = rcmail::get_instance();
@@ -71,6 +91,9 @@ class mailhub_folders extends rcube_plugin
         // that shows every account's Trash.
         foreach (self::SPECIAL as $type => $mbox) {
             $rcmail->config->set($type . '_mbox', $mbox);
+        }
+        if ($this->archive_view()) {
+            $rcmail->config->set('archive_mbox', self::ARCHIVE);
         }
 
         // Opening the mail view without a folder: the merged inbox, unless another
@@ -109,6 +132,10 @@ class mailhub_folders extends rcube_plugin
         unset($list[$parent]['folders'][$child]);
         foreach (self::HIDDEN as $f) {
             unset($list[$f]);
+        }
+        if ($this->archive_view()) {
+            unset($list['Archive']);
+            $this->set_class($list, self::ARCHIVE, 'archive');
         }
         $inbox['class'] = 'inbox';
         $inbox['folders'] = [];
@@ -152,6 +179,22 @@ class mailhub_folders extends rcube_plugin
         foreach ($prefs as $k => $v) {
             $rcmail->config->set($k, $v);
         }
+    }
+
+    /** The folder's icon (Roundcube gives one to Inbox, Drafts, Sent, Junk and Trash only). */
+    private function set_class(array &$list, $id, $class)
+    {
+        foreach ($list as &$f) {
+            if (($f['id'] ?? null) === $id) {
+                $f['class'] = trim(($f['class'] ?? '') . ' ' . $class);
+                return true;
+            }
+            if (!empty($f['folders']) && $this->set_class($f['folders'], $id, $class)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function parents(array $folders, array &$out)
