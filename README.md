@@ -63,6 +63,14 @@ image was built up to 0.4.0 (history kept here).
   `plugin.archive` and sets `env.archive_folder`, which is what skins look for. `mailhub_folders` makes
   `Merged/Archive` (mailhub-mirror 0.4.5+) the Archive special folder: listed with Trash and Junk, the local
   `Archive` hidden.
+- **`plugins/mailhub_mcp/`**: *Settings → AI assistant*, its own entry in the Settings menu (after Mail accounts):
+  the MCP server ([worph/mailhub-mcp](https://github.com/worph/mailhub-mcp)) on or off, its write access, each tool
+  on or off (each switch saved at once), the calls per 24 h / 7 / 30 days and per tool, and the latest 100 calls
+  (time, tool, shortened arguments, result, duration) with *Clear history*. Only for the mailbox the MCP server
+  serves, `mailhub_mcp_owner` (`admin`): any other user has no menu entry and no action. Writes `settings.json` in
+  `mailhub_mcp_settings_dir` (`/var/mailhub/mcp-settings`), which the server reads on every request; reads the
+  server's `tools.json` and `calls.jsonl` from `mailhub_mcp_log_dir` (`/var/mailhub/mcp-log`, read-only). Needs
+  mailhub-mcp 1.1.0+ and to be in the app's `ROUNDCUBEMAIL_PLUGINS`.
 - **Skins**: 11 to choose from in *Settings → User interface*, the app's default being
   [Elastic2022](https://github.com/seb1k/Elastic2022): Roundcube's Elastic,
   [Workbench](https://github.com/AR-Sebastian/roundcube-skin-workbench),
