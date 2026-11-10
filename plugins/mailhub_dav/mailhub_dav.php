@@ -5,9 +5,9 @@
  *
  * Loads the Kolab `calendar` and `kolab_addressbook` plugins with their CalDAV /
  * CardDAV drivers pointed at:
- *   - by default, MailHub's built-in Baïkal (`mailhub_dav_default_url`), which
- *     shares the mailbox login, so the DAV client reuses the Roundcube session's
- *     credentials and nothing has to be set up;
+ *   - by default, MailHub's built-in Baïkal (`mailhub_dav_default_url`), with the
+ *     mailbox's device login (mailhub_sso: the one phones use), so nothing has to
+ *     be set up;
  *   - or another CalDAV/CardDAV server the user connects in Settings → "Calendar
  *     & contacts" (Nextcloud, Radicale, a standalone Baïkal…). That connection is
  *     tested before it is saved, and its password stored encrypted.
@@ -45,7 +45,17 @@ class mailhub_dav extends rcube_plugin
             // in the image): its calendars are the user's own, not shared ones.
             $rcmail->config->set('kolab_dav_owner', $dav['user']);
         } elseif ($url = $rcmail->config->get('mailhub_dav_default_url')) {
-            // Built-in server: same login as the mailbox, taken from the session.
+            // Built-in server: this mailbox's device login (mailhub_sso). The
+            // session holds no password to reuse (Roundcube logs in to Dovecot
+            // with its master login).
+            if (class_exists('mailhub_sso')) {
+                [$user, $pass] = mailhub_sso::device_login((string) $_SESSION['username']);
+                if ($pass === '' || !mailhub_sso::dav_ready($user)) {
+                    return;  // not in effect at Baïkal yet: no calendar rather than a failing one
+                }
+                $url = self::url_with_credentials($url, $user, $pass);
+                $rcmail->config->set('kolab_dav_owner', $user);
+            }
         } else {
             return;
         }

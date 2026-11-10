@@ -1,0 +1,21 @@
+/* MailHub: Settings → Phones & computers. */
+
+/* the Settings menu entry (Elastic-family skins draw icons with Font Awesome) */
+#settings-menu li.mailhub-devices a:before,
+#settings-menu .mailhub-devices > a:before {
+    content: "\f3cd";
+}
+
+.mh-page { max-width: 54rem; padding: 1rem 1.5rem 2rem; }
+.mh-page h2 { font-size: 1.3rem; margin: .25rem 0 .5rem; }
+.mh-page > p { color: #737677; line-height: 1.45; }
+table.mh-devices { margin: 1rem 0; border-collapse: collapse; }
+table.mh-devices th { text-align: left; font-weight: 600; padding: .45rem 1.25rem .45rem 0; vertical-align: top; white-space: nowrap; }
+table.mh-devices td { padding: .45rem 0; word-break: break-all; }
+.mh-secret summary { cursor: pointer; color: #37a0ff; }
+.mh-secret code { display: inline-block; margin-top: .25rem; user-select: all; }
+.mh-hint { color: #737677; font-size: .9rem; }
+@media (max-width: 480px) {
+    table.mh-devices th, table.mh-devices td { display: block; padding: .15rem 0; }
+    table.mh-devices td { padding-bottom: .6rem; }
+}
