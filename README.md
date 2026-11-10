@@ -71,6 +71,10 @@ image was built up to 0.4.0 (history kept here).
   `mailhub_mcp_settings_dir` (`/var/mailhub/mcp-settings`), which the server reads on every request; reads the
   server's `tools.json` and `calls.jsonl` from `mailhub_mcp_log_dir` (`/var/mailhub/mcp-log`, read-only). Needs
   mailhub-mcp 1.1.0+ and to be in the app's `ROUNDCUBEMAIL_PLUGINS`.
+- **`mailhub_collect`** ([worph/mailhub_collect](https://github.com/worph/mailhub_collect), pinned by
+  commit, `MAILHUB_COLLECT_COMMIT`): *Contacts → Collect* fills Collected recipients from every Sent folder and
+  the senders you replied to, incrementally, and shows "Collected from" in the contact view. Its table is
+  created by `post-setup/10-plugin-schemas.php`. Needs to be in the app's `ROUNDCUBEMAIL_PLUGINS`.
 - **Skins**: 11 to choose from in *Settings → User interface*, the app's default being
   [Elastic2022](https://github.com/seb1k/Elastic2022): Roundcube's Elastic,
   [Workbench](https://github.com/AR-Sebastian/roundcube-skin-workbench),

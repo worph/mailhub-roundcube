@@ -24,6 +24,8 @@ ARG OUTLOOK_COMMIT=cdf7bff61b98ae972f8cb1a37e0f62cbbb32c8a4
 ARG AIR_COMMIT=b2662e4ff2dc2b1aeb09da0b4571fb2b4c568b1a
 ARG ELASTICGOOGLE_COMMIT=d323a72c29cd98c4ab88a1c339f0b82d896f2b65
 ARG ACCESSIBILITY_COMMIT=2fec5b04a50cc559e041d46722c10cb87124c83b
+# MailHub plugins kept in their own repo (commit)
+ARG MAILHUB_COLLECT_COMMIT=58e88223fae76b4146d762dcfd151649cbc0b5bf
 COPY patches/ /patches/
 RUN git clone --depth 1 --branch roundcubemail-plugins-kolab-${KOLAB_PLUGINS_VERSION} \
       https://git.kolab.org/diffusion/RPK/roundcubemail-plugins-kolab.git /rpk \
@@ -46,6 +48,7 @@ RUN git clone --depth 1 --branch roundcubemail-plugins-kolab-${KOLAB_PLUGINS_VER
  && at skive/roundcube-air-skin /src/air ${AIR_COMMIT} \
  && at nyouaku/elastic-google /skins/elasticgoogle ${ELASTICGOOGLE_COMMIT} \
  && at nicolas-joubert/roundcube-skins-elastic-accessibility /skins/accessibility ${ACCESSIBILITY_COMMIT} \
+ && at worph/mailhub_collect /out/mailhub_collect ${MAILHUB_COLLECT_COMMIT} && rm -rf /out/mailhub_collect/.git \
  && cp -r /src/hellomail/hellomail /skins/hellomail \
  && cp -r /src/outlook/skins/outlook /skins/outlook \
  && cp -r /src/air/skins/air /src/air/skins/airblue /skins/ \

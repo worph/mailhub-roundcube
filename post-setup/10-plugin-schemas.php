@@ -1,6 +1,6 @@
 #!/usr/bin/env php
 <?php
-// Create / upgrade the DB tables of the Kolab plugins. Roundcube's entrypoint
+// Create / upgrade the DB tables of the Kolab plugins and mailhub_collect. Roundcube's entrypoint
 // only manages the core schema; plugins installed outside composer need this.
 define('INSTALL_PATH', '/var/www/html/');
 require_once INSTALL_PATH . 'program/include/clisetup.php';
@@ -8,6 +8,7 @@ require_once INSTALL_PATH . 'program/include/clisetup.php';
 $packages = [
     'libkolab'        => INSTALL_PATH . 'plugins/libkolab/SQL',
     'calendar-caldav' => INSTALL_PATH . 'plugins/calendar/drivers/caldav/SQL',
+    'mailhub_collect' => INSTALL_PATH . 'plugins/mailhub_collect/SQL',
 ];
 
 // Upstream bugs in the initial scripts, keyed by "<package>/<provider>".
