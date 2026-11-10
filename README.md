@@ -53,7 +53,8 @@ image was built up to 0.4.0 (history kept here).
   `ROUNDCUBEMAIL_PLUGINS`.
 - **`plugins/mailhub_archive/`**: *Archive*, as on Gmail, next to Delete: in the toolbar (Elastic2022 shows it beside
   Delete when messages are selected, and in the message header), in the full-page message view, and on each row of
-  the list in the flag's place on hover (a set flag still shows; flagging stays in the *Mark* menu). A message goes
+  the list on hover, between Delete and the flag (right after Elastic2022's row Delete icon, styled like it; next to
+  the flag in skins without one). A message goes
   into the IMAP Archive folder of its own account, `Live/<address>/Archive` (or `Archives`, whichever the account
   already has; created when it has neither, and the mirror creates it at the provider too), so the provider sees it
   archived. In `Merged/All inboxes` each message's real folder is asked of Dovecot (`FETCH X-MAILBOX`); a message of

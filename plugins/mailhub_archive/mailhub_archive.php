@@ -13,8 +13,7 @@
  * asked of Dovecot (FETCH X-MAILBOX), so each one goes to its own account.
  *
  * Buttons: Archive in the toolbar (list and message view), and on each row of the
- * message list in place of the flag on hover (the flag still shows when set, and
- * stays in the Mark menu). Nothing is archived from inside an archive folder.
+ * message list on hover, between Delete and the flag. Nothing is archived from inside an archive folder.
  */
 class mailhub_archive extends rcube_plugin
 {
