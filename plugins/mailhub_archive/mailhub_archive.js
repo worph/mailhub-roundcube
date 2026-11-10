@@ -1,5 +1,5 @@
 /**
- * MailHub: Archive (toolbar, and on each message row in place of the flag), the
+ * MailHub: Archive (toolbar, and on each message row between Delete and the flag), the
  * server sending each message to its own account's Archive folder.
  */
 (function () {
@@ -32,18 +32,38 @@
         }
     }
 
-    function add_row_button(row) {
-        if (!row || !row.obj || in_archive() || $('span.mh-archive', row.obj).length) {
-            return;
+    // Elastic2022 puts a Delete icon in each row (span.deleteicon in span.size, shown
+    // on hover), on listupdate: Archive goes right after it, in the same style, the
+    // flag staying after both. Other skins: Archive next to the flag, on hover.
+    function place_row_button(row, button) {
+        var del = $('span.deleteicon', row.obj).first();
+        if (del.length) {
+            if (!button.prev().is(del)) {
+                button.removeClass('mh-byflag').addClass('sebicon insummary mh-bydelete').insertAfter(del);
+            }
+            return true;
         }
         var flag = row.flagicon || $('[id^="flagicn"]', row.obj).get(0);
         if (!flag) {
+            return false;
+        }
+        if (!button.parent().length) {
+            button.addClass('mh-byflag').insertBefore(flag);
+        }
+        return true;
+    }
+
+    function add_row_button(row) {
+        if (!row || !row.obj || in_archive()) {
+            return;
+        }
+        var button = $('span.mh-archive', row.obj).first();
+        if (button.length) {
+            place_row_button(row, button);
             return;
         }
         var label = rcmail.get_label('mailhub_archive.buttontitle');
-        $(row.obj).addClass('mh-archivable');
-        $('<span class="mh-archive" role="button">').attr({ title: label, 'aria-label': label })
-            .insertAfter(flag)
+        button = $('<span class="mh-archive skip-on-drag" role="button">').attr({ title: label, 'aria-label': label })
             .on('mousedown mouseup touchstart touchend', function (e) {
                 // not a row click: the row is neither selected nor opened
                 e.stopPropagation();
@@ -53,6 +73,7 @@
                 e.stopPropagation();
                 archive(row.uid);
             });
+        place_row_button(row, button);
     }
 
     window.rcmail && rcmail.addEventListener('init', function () {
@@ -71,6 +92,12 @@
             $.each(rcmail.message_list.rows, function (uid, row) { add_row_button(row); });
         }
         rcmail.addEventListener('insertrow', function (e) { add_row_button(e.row); });
+        // after the skin's own listupdate handler (Elastic2022 adds its Delete icons there)
+        rcmail.addEventListener('listupdate', function () {
+            setTimeout(function () {
+                rcmail.message_list && $.each(rcmail.message_list.rows, function (uid, row) { add_row_button(row); });
+            }, 0);
+        });
 
         // a message opened full page: Elastic2022 adds Archive to the message header
         // in the preview pane only; add it here too, before Reply as it does
