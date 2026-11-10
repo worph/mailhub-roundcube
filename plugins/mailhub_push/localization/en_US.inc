@@ -1,0 +1,53 @@
+<?php
+
+$labels = [];
+$labels['section'] = 'Notifications';
+$labels['sectiontitle'] = 'Notifications for new mail on your phones and computers';
+$labels['intro'] = 'Get a notification when new mail arrives, on this device and any other you turn them on for, even with MailHub closed. Each phone or computer is turned on from its own browser, on this page.';
+$labels['thisdevice'] = 'This device';
+$labels['checking'] = 'Checking this browser…';
+$labels['enable'] = 'Turn on notifications here';
+$labels['disable'] = 'Turn off here';
+$labels['enabling'] = 'Allow notifications when your browser asks…';
+$labels['enabled_here'] = 'Notifications are on for this device.';
+$labels['notenabled_here'] = 'Notifications are off for this device.';
+$labels['unsupported'] = 'This browser cannot receive push notifications.';
+$labels['unsupported_ios'] = 'On iPhone and iPad, add MailHub to the Home Screen first (Share → Add to Home Screen), then open it from there and come back to this page.';
+$labels['denied'] = 'Notifications are blocked for this site in the browser settings. Allow them there, then reload this page.';
+$labels['subscribefailed'] = 'Could not turn on notifications.';
+$labels['test'] = 'Send test notification';
+$labels['testall'] = 'Send to all devices';
+$labels['testsending'] = 'Sending…';
+$labels['testok'] = '$device: sent. It should show up in a few seconds.';
+$labels['testfail'] = '$device: not delivered ($error).';
+$labels['testnone'] = 'No device to send to: turn notifications on first.';
+$labels['testtimeout'] = 'No answer from the mail sync service. Notifications are sent by it: check that it is running.';
+$labels['devices'] = 'Devices';
+$labels['nodevices'] = 'No device gets notifications yet.';
+$labels['thisdevice_badge'] = 'this device';
+$labels['unknowndevice'] = 'Device';
+$labels['added'] = 'added $date';
+$labels['lastok'] = 'last notified $date';
+$labels['lasterror'] = 'last attempt failed $date: $error';
+$labels['nodelivery'] = 'nothing sent yet';
+$labels['expired'] = 'expired: turn notifications on again from that device';
+$labels['remove'] = 'Remove';
+$labels['removeconfirm'] = 'Stop notifications on "$device"?';
+$labels['what'] = 'What notifies';
+$labels['content'] = 'Show sender and subject';
+$labels['contenthint'] = 'Off: only "New message on <address>", for a lock screen others can see. Notifications are encrypted for your devices either way.';
+$labels['accounts'] = 'Accounts';
+$labels['accountshint'] = 'New mail in the inbox of these accounts notifies.';
+$labels['noaccounts'] = 'No mail account yet: add one in Mail accounts.';
+$labels['saved'] = 'Saved';
+$labels['savefailed'] = 'Could not save the notification settings.';
+$labels['dirnotwritable'] = 'The settings folder is not writable: changes cannot be saved.';
+$labels['nomirror'] = 'The mail sync service is older than this page and cannot send notifications yet. They will work once MailHub is updated.';
+
+// the notifications themselves (sent by the mail sync service)
+$labels['push_new_many'] = '$n new messages';
+$labels['push_hidden_one'] = 'New message on $account';
+$labels['push_hidden_many'] = '$n new messages on $account';
+$labels['push_no_subject'] = '(no subject)';
+$labels['push_test_title'] = 'MailHub';
+$labels['push_test_body'] = 'Test notification: notifications work on this device.';

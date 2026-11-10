@@ -1,0 +1,64 @@
+/* MailHub: Settings → Notifications. Same layout as the AI assistant page (mailhub_mcp);
+   colours lean on the skin's own so the page follows light and dark modes. */
+
+/* the Settings menu entry (Elastic-family skins draw icons with Font Awesome: bell) */
+#settings-menu li.mailhub-push a:before,
+#settings-menu .mailhub-push > a:before {
+    content: "\f0f3";
+}
+
+.mhp-page { max-width: 60rem; padding: 1rem 1.5rem 2rem; }
+.mhp-title { font-size: 1.3rem; margin: .25rem 0 .5rem; }
+.mhp-intro, .mhp-empty { color: #737677; margin: 0 0 1.25rem; line-height: 1.45; }
+.mhp-sub { font-size: 1.1rem; margin: 1.75rem 0 .5rem; }
+.mhp-subtitle { font-weight: 500; margin: 1rem 0 .2rem; }
+.mhp-hint { color: #737677; font-size: .875rem; margin: .2rem 0 .6rem; line-height: 1.4; }
+
+.mhp-card {
+    border: 1px solid rgba(127, 127, 127, .3);
+    border-radius: 8px;
+    padding: .9rem 1.1rem;
+}
+.mhp-readonly { opacity: .6; pointer-events: none; }
+.mhp-state { margin-bottom: .75rem; line-height: 1.45; }
+.mhp-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
+.mhp-buttons .button { margin: 0; }
+.mhp-result:not(:empty) { margin-top: .75rem; line-height: 1.5; }
+
+.mhp-row { margin-bottom: .6rem; padding-left: 2.4rem; position: relative; }
+.mhp-row input.mhp-switch { position: absolute; left: 0; top: .1rem; margin: 0; }
+.mhp-row label { font-weight: 500; margin: 0; cursor: pointer; }
+.mhp-row .mhp-hint { margin: .1rem 0 0; }
+
+.mhp-devices { list-style: none; margin: 0; padding: 0; }
+.mhp-device {
+    border: 1px solid rgba(127, 127, 127, .3);
+    border-radius: 8px;
+    padding: .6rem 1rem;
+    margin-bottom: .5rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 1rem;
+}
+.mhp-device .mhp-devname { font-weight: 500; }
+.mhp-device .mhp-hint { grid-column: 1; margin: .1rem 0 0; }
+.mhp-device .mhp-remove { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+.mhp-gone .mhp-devname { opacity: .6; }
+.mhp-badge {
+    font-size: .75rem;
+    font-weight: normal;
+    border-radius: 1rem;
+    padding: .05rem .5rem;
+    margin-left: .5rem;
+    background: rgba(37, 99, 235, .12);
+    color: #2563eb;
+}
+
+.mhp-good { color: #2e9e44; }
+.mhp-bad { color: #d9363e; }
+.mhp-warn { color: #b26a00; }
+
+@media (max-width: 480px) {
+    .mhp-page { padding: .75rem; }
+}
