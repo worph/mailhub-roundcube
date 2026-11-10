@@ -33,8 +33,12 @@ image was built up to 0.4.0 (history kept here).
   a generated device password: its `{SSHA512}` hash for Dovecot, its Baïkal digest, and itself encrypted with
   Roundcube's key), which mailhub-mirror 0.5.0+ applies. *Settings → Phones & computers* shows the mailbox's
   IMAPS and CalDAV/CardDAV login (`MAILHUB_IMAPS_HOST`, `MAILHUB_DAV_URL`); the owner's is the app's credential
-  (`MAILHUB_PASSWORD`, changed in Maison), the others can be replaced there. Must come first in the app's
-  `ROUNDCUBEMAIL_PLUGINS`.
+  (`MAILHUB_PASSWORD`, changed in Maison), the others can be replaced there. Where skins show the account
+  (Outlook above the folders, Elastic's folder-list title) it shows the server account signed in (AppShield's
+  user name), not Roundcube's default sender; Roundcube's first identity (`<user>@<IMAP host>`, not an
+  address) is named "Add a mail account to send" until the first mail account replaces it; and at login a
+  default sender that is none of the mailbox's accounts gives way to the first account's. Must come first in
+  the app's `ROUNDCUBEMAIL_PLUGINS`.
 - **`plugins/mailhub_dav/`**: loads the calendar and contacts plugins against MailHub's built-in Baïkal
   (with the mailbox's device login, from `mailhub_sso`), or against another CalDAV/CardDAV server set in
   *Settings → Calendar & contacts* (tested before saving, password stored encrypted).

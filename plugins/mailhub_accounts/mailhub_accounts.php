@@ -289,10 +289,21 @@ class mailhub_accounts extends rcube_plugin
                 break;
 
             case 'remove':
-                // The identity stays (you can still reply from that address). The
+                // The identity stays (you can still reply from that address), but
+                // no longer as the default sender while another account is left. The
                 // mirror sees the file go, stops and deletes this server's copy only.
                 $email = $accounts[$slug]['email'];
+                $iid = (int) ($accounts[$slug]['identity_id'] ?? 0);
                 unset($accounts[$slug]);
+                $default = $rcmail->user->get_identity();
+                if ($default && (int) $default['identity_id'] === $iid) {
+                    foreach ($accounts as $a) {
+                        if (!empty($a['identity_id'])) {
+                            $rcmail->user->set_default((int) $a['identity_id']);
+                            break;
+                        }
+                    }
+                }
                 @unlink($this->accounts_dir() . "/$slug.json");
                 @unlink($this->accounts_dir() . "/$slug.getmailrc");  // from before the mirror
                 $msg = $this->gettext(['name' => 'removed', 'vars' => ['email' => $email]]);
