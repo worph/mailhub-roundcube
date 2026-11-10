@@ -2,7 +2,7 @@
 
 `ghcr.io/worph/mailhub-roundcube`: the webmail of the Yundera store's **MailHub** app. Roundcube + Kolab
 calendar and address book plugins (CalDAV / CardDAV drivers) + identity_smtp (send through each identity's
-own provider) + our `mailhub_sso`, `mailhub_dav`, `mailhub_accounts` and `mailhub_branding` plugins + 11 skins.
+own provider) + our `mailhub_*` plugins (SSO, accounts, folders, archive, DAV, MCP, branding, push) + 11 skins.
 
 The app itself (compose, seeded config, setup scripts, rationale) lives in the store: `Yundera/AppStore` →
 `Apps/MailHub`. The other MailHub images (mirror, MCP server) and the test kit (`dev/`, including
@@ -60,7 +60,8 @@ image was built up to 0.4.0 (history kept here).
   `icons/maskable.svg` (full bleed, for Android's adaptive shapes and iOS). The manifest is `manifest.json`
   because `static.php` doesn't serve `.webmanifest`; its URLs are relative (`../../../../` is the
   install root, seen from `static.php/plugins/mailhub_branding/icons/`). Elastic2022 appends its own
-  manifest (Roundcube's icons) from `ui.js`; browsers use the first one in the page, ours.
+  manifest (Roundcube's icons) from `ui.js`; browsers use the first one in the page, ours. Needs to be in the
+  app's `ROUNDCUBEMAIL_PLUGINS` (it was not before 0.6.0, so installed MailHubs got Roundcube's icon).
 - **`plugins/mailhub_folders/`**: the merged folders are the main ones. The mail view opens on
   `Merged/All inboxes`, listed first as *Inbox*; `Merged/Trash` and `Merged/Junk` are Roundcube's Trash and Junk
   (over the user's Special folders setting), so Delete moves a message there (into the local Trash: the mirror's
@@ -91,6 +92,18 @@ image was built up to 0.4.0 (history kept here).
   `mailhub_mcp_settings_dir` (`/var/mailhub/mcp-settings`), which the server reads on every request; reads the
   server's `tools.json` and `calls.jsonl` from `mailhub_mcp_log_dir` (`/var/mailhub/mcp-log`, read-only). Needs
   mailhub-mcp 1.1.0+ and to be in the app's `ROUNDCUBEMAIL_PLUGINS`.
+- **`plugins/mailhub_push/`**: *Settings → Notifications* (after Mail accounts, every user): Web Push
+  notifications for new mail on phones and computers, also with MailHub closed. *Turn on notifications here*
+  subscribes this browser (service worker `sw.js`, no fetch handler, nothing cached) with the server key the
+  mirror publishes (`mailhub_mirror_state_dir/.push/vapid-public.txt`); *Send test notification* (this device,
+  or all) has the mirror send one and shows each device's answer; the devices list (label, added, last delivery or
+  failure, *expired* once the push service drops a subscription, *Remove*); *Show sender and subject* and which
+  accounts notify (default: those in the Merged views). Writes `.push.json` and `.push-test.json` in the user's
+  `mailhub_accounts_dir/<user>/`; reads `<user>/push-status.json` from the mirror's state. Every page re-sends
+  this browser's subscription once per session if the browser renewed it. The notification texts are written in
+  the user's language for the mirror. On iPhone / iPad, Web Push needs MailHub added to the Home Screen
+  (`mailhub_branding`'s manifest). Needs mailhub-mirror 0.6.0+ (the sender) and to be in the app's
+  `ROUNDCUBEMAIL_PLUGINS`; `badge-96.png` is the monochrome envelope Android shows in the status bar.
 - **`mailhub_collect`** ([worph/mailhub_collect](https://github.com/worph/mailhub_collect), pinned by
   commit, `MAILHUB_COLLECT_COMMIT`): *Contacts → Collect* fills Collected recipients from every Sent folder and
   the senders you replied to, incrementally, and shows "Collected from" in the contact view. Its table is
