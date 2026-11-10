@@ -19,7 +19,7 @@
  *   - keeps the registry of users (`<users dir>/<name>.json`) that mailhub-mirror
  *     reads to give each one a mailbox, device login and calendar;
  *   - shows Settings → "Phones & computers": the IMAPS and CalDAV/CardDAV login of
- *     this mailbox (the owner's is the app's credential, set in Maison; the others
+ *     this mailbox (the owner's is the app's MAILHUB_PASSWORD secret; the others
  *     a generated device password that can be replaced here).
  *
  * The plain `Remote-User` header is never trusted: the other containers on the
@@ -430,7 +430,7 @@ class mailhub_sso extends rcube_plugin
 
     /**
      * The device login of a local user (IMAPS, CalDAV/CardDAV): [user, password].
-     * The owner's is the app's credential (MAILHUB_PASSWORD).
+     * The owner's is the app's MAILHUB_PASSWORD secret.
      */
     public static function device_login($local)
     {
