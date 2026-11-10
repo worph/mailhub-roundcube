@@ -1,0 +1,59 @@
+/* MailHub: Settings → AI assistant. Colours lean on the skin's own ones where it
+   has them, so the page follows light and dark modes. */
+
+/* the Settings menu entry (Elastic-family skins draw icons with Font Awesome: robot) */
+#settings-menu li.mailhub-mcp a:before,
+#settings-menu .mailhub-mcp > a:before {
+    content: "\f544";
+}
+
+.mhm-page { max-width: 60rem; padding: 1rem 1.5rem 2rem; }
+.mhm-title { font-size: 1.3rem; margin: .25rem 0 .5rem; }
+.mhm-intro, .mhm-empty { color: #737677; margin: 0 0 1.25rem; line-height: 1.45; }
+.mhm-sub { font-size: 1.1rem; margin: 1.75rem 0 .5rem; display: flex; align-items: center; gap: 1rem; }
+.mhm-sub .mhm-clear { margin: 0 0 0 auto; font-size: .875rem; }
+.mhm-hint { color: #737677; font-size: .875rem; margin: .2rem 0 .6rem; line-height: 1.4; }
+
+.mhm-card {
+    border: 1px solid rgba(127, 127, 127, .3);
+    border-radius: 8px;
+    padding: .9rem 1.1rem;
+}
+.mhm-card .mhm-sub { margin-top: 1.25rem; }
+.mhm-readonly { opacity: .6; pointer-events: none; }
+.mhm-row { margin-bottom: .6rem; padding-left: 2.4rem; position: relative; }
+.mhm-row input.mhm-switch { position: absolute; left: 0; top: .1rem; margin: 0; }
+.mhm-row label { font-weight: 500; margin: 0; cursor: pointer; }
+.mhm-row .mhm-hint { margin: .1rem 0 0; }
+.mhm-tools .mhm-row label { font-family: monospace; font-weight: normal; }
+.mhm-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0 1.5rem; }
+/* allowed by its own switch, but off while the MCP or write access is off */
+.mhm-tools.mhm-off .mhm-tool,
+.mhm-tools.mhm-nowrite .mhm-tool.mhm-writes { opacity: .45; }
+
+.mhm-tiles { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+.mhm-tile {
+    flex: 1 1 9rem;
+    border: 1px solid rgba(127, 127, 127, .3);
+    border-radius: 8px;
+    padding: .7rem .9rem;
+}
+.mhm-num { font-size: 1.6rem; font-weight: 600; line-height: 1.1; }
+.mhm-tilelabel { margin-top: .15rem; }
+.mhm-tilesub { color: #737677; font-size: .85rem; }
+
+.mhm-scroll { overflow-x: auto; }
+.mhm-table { width: 100%; }
+.mhm-table th, .mhm-table td { padding: .35rem .6rem; text-align: left; vertical-align: top; }
+.mhm-table td.mhm-tool { font-family: monospace; white-space: nowrap; }
+.mhm-table .mhm-n { text-align: right; white-space: nowrap; }
+.mhm-table td.mhm-date { white-space: nowrap; }
+.mhm-table td.mhm-args { font-family: monospace; font-size: .85rem; word-break: break-word; color: #737677; }
+.mhm-good { color: #2e9e44; }
+.mhm-bad { color: #d9363e; }
+.mhm-tilesub.mhm-bad { color: #d9363e; }
+
+@media (max-width: 480px) {
+    .mhm-page { padding: .75rem; }
+    .mhm-history td.mhm-args { min-width: 12rem; }
+}
