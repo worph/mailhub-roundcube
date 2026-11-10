@@ -17,3 +17,5 @@ $labels['ownerpass'] = 'C\'est l\'identifiant de l\'app : changez-le dans les Id
 $labels['regenerate'] = 'Remplacer le mot de passe';
 $labels['regeneratehint'] = 'Le remplacer déconnecte chaque téléphone et ordinateur qui utilise l\'ancien : saisissez-y le nouveau.';
 $labels['regenerated'] = 'Nouveau mot de passe défini. Il s\'applique dans quelques secondes.';
+$labels['signedinas'] = 'Connecté en tant que $name avec votre compte serveur (boîte $mailbox). Les adresses d\'envoi sont dans Paramètres → Identités.';
+$labels['placeholdername'] = 'Ajoutez un compte mail pour envoyer';

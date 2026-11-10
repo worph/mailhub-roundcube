@@ -54,9 +54,13 @@ class mailhub_sso extends rcube_plugin
         $this->add_hook('login_after', [$this, 'login_after']);
         $this->add_hook('logout_after', [$this, 'logout_after']);
         $this->add_hook('unauthenticated', [$this, 'unauthenticated']);
+        $this->add_hook('user_create', [$this, 'user_create']);
+        // The account name skins show (Outlook: atop the folders; Elastic: the
+        // folder list's title), Roundcube's default sender address otherwise.
+        $this->add_hook('template_object_username', [$this, 'username_object']);
 
+        $this->add_texts('localization/', false);
         if ($rcmail->task == 'settings') {
-            $this->add_texts('localization/', false);
             $this->add_hook('settings_actions', [$this, 'settings_actions']);
             $this->register_action(self::ACTION, [$this, 'devices_page']);
             $this->register_action(self::ACTION . '-do', [$this, 'devices_do']);
@@ -134,10 +138,59 @@ class mailhub_sso extends rcube_plugin
         if ($this->pending) {
             $_SESSION['mailhub_sub'] = $this->pending['sub'];
             $_SESSION['mailhub_user'] = $_SESSION['username'];
+            self::repair_default_identity();
             return array_merge($args, $this->return);
         }
 
         return $args;
+    }
+
+    /**
+     * The server account signed in (AppShield's user name), shown where skins
+     * show the account: it is who you are here, one MailHub mailbox per server
+     * account. The addresses you send from are the identities.
+     */
+    public function username_object($args)
+    {
+        $id = self::identity();
+        $local = (string) ($_SESSION['username'] ?? '');
+        $name = $id ? ($id['user'] !== '' ? $id['user'] : ($id['email'] !== '' ? $id['email'] : $local)) : $local;
+        if ($name !== '') {
+            $args['content'] = html::span(['title' => $this->gettext(['name' => 'signedinas',
+                'vars' => ['name' => $name, 'mailbox' => $local]])], rcube::Q($name));
+        }
+
+        return $args;
+    }
+
+    /**
+     * Roundcube's first identity, `<user>@<IMAP host>`, is not an address: say so
+     * until the first mail account replaces it (mailhub_accounts).
+     */
+    public function user_create($args)
+    {
+        $args['user_name'] = $this->gettext('placeholdername');
+
+        return $args;
+    }
+
+    /**
+     * The default sender must be one of the mailbox's mail accounts once it has
+     * one: an identity without its account (its account removed, or Roundcube's
+     * placeholder) has no SMTP and cannot send. Before 0.5.0 removing the default
+     * account left its identity the default.
+     */
+    private static function repair_default_identity()
+    {
+        $rcmail = rcmail::get_instance();
+        $accounts = (array) $rcmail->config->get('mailhub_accounts', []);
+        $ids = array_values(array_filter(array_map(function ($a) {
+            return (int) ($a['identity_id'] ?? 0);
+        }, $accounts)));
+        $default = $rcmail->user->get_identity();
+        if ($ids && $default && !in_array((int) $default['identity_id'], $ids, true)) {
+            $rcmail->user->set_default($ids[0]);
+        }
     }
 
     public function logout_after($args)
@@ -288,7 +341,9 @@ class mailhub_sso extends rcube_plugin
 
             if ($found) {
                 // Name and address follow the identity provider.
-                if (($found['name'] ?? '') !== $id['name'] || ($found['email'] ?? '') !== $id['email']) {
+                if (($found['name'] ?? '') !== $id['name'] || ($found['email'] ?? '') !== $id['email']
+                    || ($found['user'] ?? '') !== $id['user']) {
+                    $found['user'] = $id['user'];
                     $found['name'] = $id['name'];
                     $found['email'] = $id['email'];
                     self::save($found);
@@ -300,6 +355,7 @@ class mailhub_sso extends rcube_plugin
             $u = [
                 'local'   => $local,
                 'sub'     => $id['sub'],
+                'user'    => $id['user'],
                 'name'    => $id['name'],
                 'email'   => $id['email'],
                 'created' => gmdate('Y-m-d\TH:i:s\Z'),

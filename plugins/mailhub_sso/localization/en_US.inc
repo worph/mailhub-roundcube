@@ -17,3 +17,5 @@ $labels['ownerpass'] = 'This is the app\'s own credential: change it in the app\
 $labels['regenerate'] = 'Replace the password';
 $labels['regeneratehint'] = 'Replacing it logs out every phone and computer that uses the old one: enter the new one there.';
 $labels['regenerated'] = 'New password set. It takes effect within a few seconds.';
+$labels['signedinas'] = 'Signed in as $name with your server account (mailbox $mailbox). The addresses you send from are under Settings → Identities.';
+$labels['placeholdername'] = 'Add a mail account to send';
