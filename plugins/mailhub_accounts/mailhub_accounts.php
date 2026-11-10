@@ -4,7 +4,7 @@
  * MailHub: the mail accounts MailHub mirrors, managed in Settings → "Mail accounts".
  *
  * One account is two things, written together after testing both logins:
- *   - its mirror: an account file (`<accounts dir>/<slug>.json`) that the
+ *   - its mirror: an account file (`<accounts dir>/<user>/<slug>.json`) that the
  *     mailhub-mirror container picks up within seconds. It keeps a local copy of the
  *     whole mailbox under Live/<address>/ (IMAP, pull only) and replays what is done
  *     there at the provider, which stays the source of truth;
@@ -17,7 +17,9 @@
  *
  * Accounts are kept in the user's prefs (password encrypted with Roundcube's DES
  * key) and the account files are rendered from them. Account files this plugin did
- * not write are listed read-only, with their status.
+ * not write (in this user's folder) are listed read-only, with their status. Each
+ * MailHub user has their own folder (mailhub_sso: one mailbox per signed-in
+ * identity), so no one sees or syncs another user's accounts.
  */
 class mailhub_accounts extends rcube_plugin
 {
@@ -510,14 +512,34 @@ class mailhub_accounts extends rcube_plugin
 
     // -------------------------------------------------------------- mirror ---
 
+    /**
+     * This user's folder of account files (`<accounts dir>/<user>/`): every MailHub
+     * user has their own mailbox, mirrored from their own accounts.
+     */
     private function accounts_dir()
     {
-        return rtrim(rcmail::get_instance()->config->get('mailhub_accounts_dir', '/var/mailhub/accounts'), '/');
+        $base = rtrim(rcmail::get_instance()->config->get('mailhub_accounts_dir', '/var/mailhub/accounts'), '/');
+        $dir = $base . '/' . self::user_dir_name();
+        if (!is_dir($dir) && is_writable($base)) {
+            @mkdir($dir, 0700);
+        }
+
+        return $dir;
     }
 
+    /** This user's mirror state (`<state dir>/<user>/`, written by mailhub-mirror). */
     private function state_dir()
     {
-        return rtrim(rcmail::get_instance()->config->get('mailhub_mirror_state_dir', '/var/mailhub/mirror'), '/');
+        return rtrim(rcmail::get_instance()->config->get('mailhub_mirror_state_dir', '/var/mailhub/mirror'), '/')
+            . '/' . self::user_dir_name();
+    }
+
+    /** The mailbox's user name, as a folder name (the mirror only knows such names). */
+    private static function user_dir_name()
+    {
+        $user = strtolower((string) ($_SESSION['username'] ?? ''));
+
+        return preg_match('/^[a-z0-9][a-z0-9._-]{0,31}$/', $user) ? $user : '_invalid';
     }
 
     private static function slug($email)

@@ -2,7 +2,7 @@
 
 `ghcr.io/worph/mailhub-roundcube`: the webmail of the Yundera store's **MailHub** app. Roundcube + Kolab
 calendar and address book plugins (CalDAV / CardDAV drivers) + identity_smtp (send through each identity's
-own provider) + our `mailhub_dav`, `mailhub_accounts` and `mailhub_branding` plugins + 11 skins.
+own provider) + our `mailhub_sso`, `mailhub_dav`, `mailhub_accounts` and `mailhub_branding` plugins + 11 skins.
 
 The app itself (compose, seeded config, setup scripts, rationale) lives in the store: `Yundera/AppStore` →
 `Apps/MailHub`. The other MailHub images (mirror, MCP server) and the test kit (`dev/`, including
@@ -20,9 +20,24 @@ image was built up to 0.4.0 (history kept here).
     "my calendars" (`kolab_dav_owner`, set by `mailhub_dav`).
 
   Both are worth proposing upstream.
-- **`plugins/mailhub_dav/`**: loads the calendar and contacts plugins against MailHub's built-in Baïkal,
-  or against another CalDAV/CardDAV server set in *Settings → Calendar & contacts* (tested before saving,
-  password stored encrypted).
+- **`plugins/mailhub_sso/`**: the server's sign-in is the only login. AppShield signs who is asking on every
+  request (`X-AppShield-Assertion`, HS256, secret `MAILHUB_ASSERTION_SECRET`, audience
+  `MAILHUB_ASSERTION_AUDIENCE`, default `mailhub`); the plugin verifies it and logs that identity in, with no
+  form, to its own mailbox. Each identity (its `sub`) gets a local user name once: the first one `admin` (the
+  mailbox that existed before), the next ones their user name. Roundcube reaches Dovecot through its master
+  login (SASL PLAIN, authzid = the user; `MAILHUB_MASTER_PASSWORD`), so it never holds a user's password. A
+  session stays bound to the identity that opened it (another `sub`, or none, ends it); without a valid
+  assertion a page says to sign in through the server, never Roundcube's form; *Logout* also signs out of the
+  server (`/nhl-auth/logout`). The plain `Remote-User` header is never trusted. Keeps the registry of users
+  (`mailhub_users_dir`, `/var/mailhub/users/<name>.json`: `sub`, name, address, and for every user but the owner
+  a generated device password: its `{SSHA512}` hash for Dovecot, its Baïkal digest, and itself encrypted with
+  Roundcube's key), which mailhub-mirror 0.5.0+ applies. *Settings → Phones & computers* shows the mailbox's
+  IMAPS and CalDAV/CardDAV login (`MAILHUB_IMAPS_HOST`, `MAILHUB_DAV_URL`); the owner's is the app's credential
+  (`MAILHUB_PASSWORD`, changed in Maison), the others can be replaced there. Must come first in the app's
+  `ROUNDCUBEMAIL_PLUGINS`.
+- **`plugins/mailhub_dav/`**: loads the calendar and contacts plugins against MailHub's built-in Baïkal
+  (with the mailbox's device login, from `mailhub_sso`), or against another CalDAV/CardDAV server set in
+  *Settings → Calendar & contacts* (tested before saving, password stored encrypted).
 - **`plugins/mailhub_accounts/`**: *Settings → Mail accounts*, its own entry in the Settings menu (after
   Identities). One card per account with its live status (refreshed every 15 s: first download count, up to
   date, or the provider's error) and buttons applied at once: *Sync now*, *Change password*, *Rename*, *Remove…*
@@ -30,9 +45,10 @@ image was built up to 0.4.0 (history kept here).
   identity stays). *Keep out of Merged* / *Show in Merged* leaves an account out of `Merged › All inboxes`,
   `Unread` and `Flagged` (`"in_views": false` in its file; mailhub-mirror 0.4.1+), for an address that gets
   mostly spam: still mirrored, read in its own `Live › <address>` folders. *Add an account* opens a dialog: Gmail, Namecheap Private Email or any IMAP/SMTP provider;
-  the IMAP and SMTP logins are tested, then the mirror account file (`<slug>.json`, 0600) and the identity with
-  the provider's SMTP (identity_smtp's format) are written. Settings: `mailhub_accounts_dir`
-  (`/var/mailhub/accounts`), `mailhub_mirror_state_dir` (`/var/mailhub/mirror`).
+  the IMAP and SMTP logins are tested, then the mirror account file (`<user>/<slug>.json`, 0600: each user's
+  own folder) and the identity with the provider's SMTP (identity_smtp's format) are written. Settings:
+  `mailhub_accounts_dir` (`/var/mailhub/accounts`), `mailhub_mirror_state_dir` (`/var/mailhub/mirror`), both
+  with one folder per user since 0.5.0 (mailhub-mirror 0.5.0+).
 - **`plugins/mailhub_branding/`**: the MailHub icon as logo (light, dark, small screens) and favicon in every
   skin, through Roundcube's `skin_logo` (left alone if the config sets one), plus a web app manifest, Apple
   touch icon and app name in every page's head, so *Install app* / *Add to Home screen* on a phone gives
