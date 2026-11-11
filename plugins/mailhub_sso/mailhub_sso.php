@@ -18,7 +18,8 @@
  *     says to go through the server's sign-in; logging out signs out of it too;
  *   - keeps the registry of users (`<users dir>/<name>.json`) that mailhub-mirror
  *     reads to give each one a mailbox, device login and calendar;
- *   - shows Settings → "Phones & computers": the IMAPS and CalDAV/CardDAV login of
+ *   - shows Settings → "Phones & computers": the IMAPS, SMTP (mailhub-submit: every
+ *     address through its own provider) and CalDAV/CardDAV login of
  *     this mailbox (the owner's is the app's MAILHUB_PASSWORD secret; the others
  *     a generated device password that can be replaced here).
  *
@@ -508,7 +509,9 @@ class mailhub_sso extends rcube_plugin
             . $row('username', $local)
             . $row('password', $secret, false)
             . ($dav !== '' ? $row('davurl', $dav) : '')
-            . $row('smtp', $this->gettext('smtpvalue'), false));
+            . $row('smtp', $imap !== '' ? "$imap, 465, SSL/TLS" : $this->gettext('nohost'), $imap !== '')
+            . ($imap !== '' ? $row('smtpalt', "$imap, 587, STARTTLS") : ''));
+        $table .= html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('smtphint')));
 
         if ($owner) {
             $change = html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('ownerpass')));

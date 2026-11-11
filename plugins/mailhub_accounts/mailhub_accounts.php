@@ -15,6 +15,11 @@
  * ("in_views": false in its file), e.g. an address that gets mostly spam: it is
  * still mirrored, and read in its own Live › <address> folders.
  *
+ * The account file also carries the SMTP server (host, port, security), for
+ * mailhub-submit: phones and desktop clients send as every address through one
+ * MailHub SMTP login, each through its own provider. Files written before that are
+ * rewritten once per session (backfill()).
+ *
  * Accounts are kept in the user's prefs (password encrypted with Roundcube's DES
  * key) and the account files are rendered from them. Account files this plugin did
  * not write (in this user's folder) are listed read-only, with their status. Each
@@ -23,7 +28,8 @@
  */
 class mailhub_accounts extends rcube_plugin
 {
-    public $task = 'settings';
+    // mail too: the account files are brought up to date once per session (backfill)
+    public $task = 'settings|mail';
 
     private const PREF = 'mailhub_accounts';
     private const ACTION = 'plugin.mailhub_accounts';
@@ -42,6 +48,10 @@ class mailhub_accounts extends rcube_plugin
 
     public function init()
     {
+        $this->add_hook('startup', [$this, 'startup']);
+        if (rcmail::get_instance()->task !== 'settings') {
+            return;
+        }
         $this->add_texts('localization/', true);
         $this->add_hook('settings_actions', [$this, 'settings_actions']);
         $this->register_action(self::ACTION, [$this, 'page']);
@@ -72,22 +82,50 @@ class mailhub_accounts extends rcube_plugin
         return $args;
     }
 
+    /** Once per session (the first page after login is the mail view): backfill(). */
+    public function startup($args)
+    {
+        if (!empty($_SESSION['username']) && empty($_SESSION['mailhub_accounts_backfilled'])) {
+            $_SESSION['mailhub_accounts_backfilled'] = true;
+            $this->backfill();
+        }
+
+        return $args;
+    }
+
+    /**
+     * Account files brought up to date with the accounts in the prefs: written if
+     * missing (accounts saved before the mirror, getmail), and rewritten if they
+     * lack the SMTP settings mailhub-submit sends with (files written before 0.8.0).
+     */
+    private function backfill()
+    {
+        $rcmail = rcmail::get_instance();
+        $dir = $this->accounts_dir();
+        if (!is_writable($dir)) {
+            return;
+        }
+        foreach ($this->accounts() as $slug => $a) {
+            $file = "$dir/$slug.json";
+            if (!is_file($file)) {
+                $this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']));
+                @touch($dir . '/.sync-now');
+            } elseif (!empty($a['smtp_host'])) {
+                $data = json_decode((string) @file_get_contents($file), true);
+                if (is_array($data) && empty($data['smtp_host'])) {
+                    $this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']));
+                }
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- page ---
 
     public function page()
     {
         $rcmail = rcmail::get_instance();
         $accounts = $this->accounts();
-
-        // Accounts saved before the mirror (getmail) get their mirror file here.
-        if (is_writable($this->accounts_dir())) {
-            foreach ($accounts as $slug => $a) {
-                if (!is_file($this->accounts_dir() . "/$slug.json")) {
-                    $this->write_account($slug, $a, (string) $rcmail->decrypt($a['pass']));
-                    @touch($this->accounts_dir() . '/.sync-now');
-                }
-            }
-        }
+        $this->backfill();
 
         $this->register_handler('plugin.body', [$this, 'render']);
         $this->include_script('mailhub_accounts.js');
@@ -579,6 +617,10 @@ class mailhub_accounts extends rcube_plugin
             'imap_host'     => $a['imap_host'],
             'imap_port'     => (int) $a['imap_port'],
             'imap_security' => $a['imap_security'],
+            // mailhub-submit (mail apps' one SMTP login) sends through these, as identity_smtp does
+            'smtp_host'     => (string) ($a['smtp_host'] ?? ''),
+            'smtp_port'     => (int) ($a['smtp_port'] ?? 0),
+            'smtp_security' => (string) ($a['smtp_security'] ?? 'ssl'),
             'preset'        => $a['preset'] ?? 'other',
             'in_views'      => ($a['in_views'] ?? true) !== false,
         ];
