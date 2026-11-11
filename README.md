@@ -64,8 +64,9 @@ image was built up to 0.4.0 (history kept here).
   app's `ROUNDCUBEMAIL_PLUGINS` (it was not before 0.6.0, so installed MailHubs got Roundcube's icon).
 - **`plugins/mailhub_folders/`**: the merged folders are the main ones. The mail view opens on
   `Merged/All inboxes`, listed first as *Inbox*; `Merged/Trash` and `Merged/Junk` are Roundcube's Trash and Junk
-  (over the user's Special folders setting), so Delete moves a message there (into the local Trash: the mirror's
-  views save there), deleting inside Trash or *Empty* deletes for good (at the provider too, for an account's own
+  (over the user's Special folders setting), so Delete moves a message there (`mailhub_archive` sends it into its
+  own account's Trash; local mail, or an account without a Trash folder, into the local Trash, where the mirror's
+  views save), deleting inside Trash or *Empty* deletes for good (at the provider too, for an account's own
   Trash). The local INBOX, Trash and Junk are not listed (their mail shows in the merged ones; still reachable as
   `?_mbox=INBOX`). Under `Live`, each account lists its INBOX first, and each account (and any folder in it with subfolders)
   starts collapsed the first time it is listed (`mailhub_folders_seen` pref); then Roundcube remembers what is
@@ -81,7 +82,13 @@ image was built up to 0.4.0 (history kept here).
   archived. In `Merged/All inboxes` each message's real folder is asked of Dovecot (`FETCH X-MAILBOX`); a message of
   the local mailbox goes to the local `Archive`. Disabled inside an archive folder. Replaces Roundcube's `archive`
   plugin, which archives into a single folder: leave that one out of `ROUNDCUBEMAIL_PLUGINS`. Also registers
-  `plugin.archive` and sets `env.archive_folder`, which is what skins look for. `mailhub_folders` makes
+  `plugin.archive` and sets `env.archive_folder`, which is what skins look for. Delete goes the same way: a move
+  into `Merged/Trash` (Delete, a row's Delete icon, a drag onto Trash) puts each message into its own account's
+  Trash (last path part `Trash`, `Deleted Items`, `Deleted Messages` or `Bin`: Gmail's `[Gmail]/Trash`), so the
+  provider has it in its Trash. On Gmail that is the only real delete (out of a folder is only a label off; the
+  message stays in All Mail); it needs mailhub-mirror 0.7.0+, which replays a move inside one account as a
+  provider MOVE. Local mail, an account without a Trash folder, or a message whose account is unknown goes into
+  the local Trash, as before. `mailhub_folders` makes
   `Merged/Archive` (mailhub-mirror 0.4.5+) the Archive special folder: listed with Trash and Junk, the local
   `Archive` hidden.
 - **`plugins/mailhub_mcp/`**: *Settings → AI assistant*, its own entry in the Settings menu (after Mail accounts):

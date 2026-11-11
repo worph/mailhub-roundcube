@@ -5,3 +5,5 @@ $labels['buttontext'] = 'Archive';
 $labels['buttontitle'] = 'Archive: into the Archive folder of its account';
 $labels['archived'] = 'Archived';
 $labels['archiveerror'] = 'Some messages could not be archived';
+$labels['deleted'] = 'Moved to Trash';
+$labels['deleteerror'] = 'Some messages could not be moved to Trash';

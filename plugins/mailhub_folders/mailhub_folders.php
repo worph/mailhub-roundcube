@@ -8,8 +8,9 @@
  * moved into them in the local folder. So here:
  *   - the mail view opens on Merged/All inboxes, shown first as "Inbox";
  *   - Merged/Trash and Merged/Junk are Roundcube's Trash and Junk: Delete moves a
- *     message there (into the local Trash, as before), deleting inside it or Empty
- *     deletes for good, at the provider too for an account's own Trash;
+ *     message there (mailhub_archive sends it into its own account's Trash, or the
+ *     local Trash for local mail), deleting inside it or Empty deletes for good, at
+ *     the provider too for an account's own Trash;
  *   - Merged/Archive (mailhub-mirror 0.4.5+: every account's Archive folder plus the
  *     local one) is the Archive special folder, listed with Trash and Junk; the
  *     mailhub_archive plugin archives into each account's own Archive folder;

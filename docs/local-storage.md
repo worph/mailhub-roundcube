@@ -1,15 +1,21 @@
 # Design note: mail kept on the server
 
-Status: proposal, nothing built. Written 2026-11-10.
+Status: proposal. Written 2026-11-10, revised 2026-11-11: the first step is **Copy to server**
+(the provider untouched); *Move to server* (freeing space at the provider) comes after it.
+The Delete fix it depends on is built: mailhub-roundcube's `mailhub_archive` + mailhub-mirror 0.7.0.
 
 ## Goal
 
-Let a user move mail out of a provider mailbox (Gmail, a domain mailbox, any IMAP account) into
-MailHub's own storage, to free space at the provider. That mail then lives only on the user's server.
+Let a user keep mail in MailHub's own storage, the server's mailbox (the "local" mailbox),
+on purpose:
 
-Today the merged folders are the main view, so the server's own mailbox (the "local" mailbox) is
-invisible. Once it holds mail the user put there on purpose, it has to be visible, and it has to be
-clear what it means.
+1. **Copy to server** (this note): a copy of chosen mail kept on the user's server, the provider
+   keeping its own. Nothing changes at the provider, so nothing can be lost there. It is a
+   backup the user controls, and the base the move builds on.
+2. **Move to server** (later): the same, then deleted at the provider, to free space there.
+
+Today the merged folders are the main view, so the local mailbox is invisible. Once it holds mail
+the user put there, it has to be visible, and it has to be clear what it is.
 
 ## What exists today
 
@@ -17,110 +23,120 @@ clear what it means.
   pull only, the provider staying the source of truth). Everything outside `Live/` and `Merged/` is
   the local mailbox.
 - The local `INBOX`, `Trash`, `Junk` and `Archive` back the merged views: `Merged/All inboxes`,
-  `Trash`, `Junk` and `Archive` include them and save into them. `mailhub_folders` hides those four.
-  Anything else at the top level is listed: the local `Sent` and `Drafts`, and any folder a user
-  creates outside `Live/`.
-- **Moving mail off a provider already works mechanically.** The Dovecot Lua hook records every
-  action on a `Live/` folder and the mirror replays it at the provider. A message removed from
-  `Live/<address>/…` becomes `UID EXPUNGE` of that one UID there. Moving a message from an account
-  into a local folder is therefore "copy here, then delete there". It is how Delete works now:
-  `Merged/Trash` saves into the local Trash.
-- On wisera on 2026-11-10, the owner's local mailbox held 8 messages, all in `Trash`. `Sent`,
-  `Drafts`, `Archive`, `Junk` and `INBOX` were empty. The provider copies (`live/`) took 2.0 GB.
-- Backups: Maison snapshots the whole app folder, and nothing is excluded. Local mail
-  (`mail/<user>/mail/`) is already backed up. Provider mail (`mail/<user>/live/`) is only a copy,
-  and the next pull would rebuild it.
+  `Trash`, `Junk` and `Archive` include them. `mailhub_folders` hides those four. Anything else at
+  the top level is listed: the local `Sent` and `Drafts`, and any folder a user creates outside `Live/`.
+- **A copy out of `Live/` already leaves the provider alone.** The Dovecot Lua hook records every
+  action, and the mirror replays only those on `Live/` folders. A message added to a local folder
+  is not replayed; only an expunge from `Live/` is. So a copy (Roundcube's *More → Copy to…*, or a
+  drag with the copy modifier) into a local folder is already a Copy to server, mechanically.
+- **Gmail**: `[Gmail]/All Mail`, Important and Starred are not mirrored (`GMAIL_SKIP`). A message
+  is held once per label in `live/`, and mail with no label (archived on Gmail) is not mirrored at
+  all, so MailHub cannot copy it.
+- Backups: Maison snapshots the whole app folder, nothing excluded. Local mail
+  (`mail/<user>/mail/`) is already backed up; provider mail (`mail/<user>/live/`) is a copy the next
+  pull would rebuild.
 
-So the work is mostly to present what exists, to add a deliberate *Move to server* action, and to
-handle the provider-specific cases. The storage mechanism itself is not new.
+### Fixed alongside (2026-11-11)
 
-## Proposal
+- **Delete** sends a message to its own account's Trash (`Live/<address>/Trash`, `[Gmail]/Trash`, …),
+  no longer to the local Trash. On Gmail, taking a message out of a folder only removes a label (it
+  stays in All Mail), so the old Delete archived it there.
+- **A move inside one account** is replayed as one provider `UID MOVE` (paired by Message-ID with
+  the expunge that follows), not `APPEND` + `EXPUNGE`: on Gmail, archiving changes the label instead
+  of making a second copy, and a move to `[Gmail]/Trash` is a real delete.
+- **Data loss in mailhub-mirror ≤ 0.6.0**: a move of several messages into a `Live/` folder
+  appended only the first one at the provider and expunged all of them there (a pull in the middle
+  of the batch renamed the others). The rest survive only as unpaired files in `live/`, and
+  removing the account deletes them. Found on wisera: 79 in `pierre.henri@aptero.co/Archive`.
+  0.7.0 needs a recovery step for installs that ran ≤ 0.6.0 (see Open questions).
+
+## Proposal: Copy to server
 
 ### 1. A visible "On this server" section
 
-A container listed next to the accounts under `Live/`, shaped like an account. Name it for what it
-is: *On this server*, or *Kept on MailHub*. Avoid "Local", which is jargon.
+A container listed next to the accounts under `Live/`, shaped like an account. Name: *On this
+server* (plainer than *Kept on MailHub*, and true whatever the app is called). Avoid "Local".
 
-- It shows the user's own folders and an Archive that is clearly the server's.
-- The local `INBOX`, `Trash` and `Junk` stay hidden. They are plumbing for the merged views.
-- The local `Sent` and `Drafts` move under it, instead of sitting at the top level next to
-  *Inbox*.
-- Show it only once it holds something other than the hidden plumbing, or once the move feature
-  ships. An empty tree with no way to fill it is noise.
+- It shows the user's own folders and the server's Archive.
+- The local `INBOX`, `Trash` and `Junk` stay hidden: plumbing for the merged views. The local Trash
+  now only gets deleted local mail, so it is not "kept on the server".
+- The local `Sent` and `Drafts` move under it, instead of sitting at the top level next to *Inbox*.
+- Shown once it holds something other than the hidden plumbing, or once Copy to server ships.
 
-Storage stays where it is. This only changes what `mailhub_folders` shows (a display name and
-grouping), so there is no Dovecot rename and nothing for IMAP clients to resync.
+Display only (`mailhub_folders`): no Dovecot rename, nothing for IMAP clients to resync.
 
-### 2. Merged views keep covering it
+### 2. The action
 
-`Merged/Archive` already includes the local `Archive`, and search over the merged views reaches local
-mail. Keep that rule for any folder kept on the server, so moving old mail off a provider never
-makes it disappear from Archive or from search. The user sees the same place with different
-storage. This is what makes the move feel safe.
+*Copy to server* on a message, a selection, or a whole folder of an account:
 
-Open question: whether user folders on the server, beyond Archive, should feed a merged view too.
-Probably not; a user folder is a place you go to on purpose.
+- Into a folder of the same name under *On this server* (`INBOX` → *Inbox*, `Archive` → *Archive*),
+  created when missing, so a copied account keeps its shape. A message already copied (same
+  Message-ID in the target) is skipped, so running it twice is safe.
+- A copy, so the source stays where it is: nothing is replayed, the provider is untouched.
+- **Disk check first**: refuse a copy that would leave the server's disk below a margin. A provider
+  holds gigabytes; the PCS disk is the user's.
+- **Progress** for a folder or a big selection, run in the background (a few thousand messages is
+  a queue, not one request), shown the way the first download is.
 
-### 3. Move semantics: copy, check, then delete at the provider
+### 3. Merged views and search
 
-The replay already orders this correctly: Dovecot writes the destination before it expunges the
-source, and the hook fires on commit. For a deliberate bulk move, add:
+Copies sit outside `Live/`, so the merged views would show a message twice (the account's and the
+server's copy) for any local folder they cover. Rule: the merged views cover only the local
+`INBOX`, `Trash`, `Junk` and `Archive` as today, and Copy to server puts an account's Archive into
+*On this server › <address> › Archive*, not into the local `Archive`. Search over *On this server*
+reaches the copies; search over the merged views does not show them twice.
 
-- **A disk check first.** Refuse a move that would leave the server's disk below a margin. A
-  provider holds gigabytes; the PCS disk is the user's.
-- **Progress and a failure report** for big moves. The replay goes one UID at a time, so a
-  10 000-message move is a queue. The Mail accounts page should show it the way it shows the first
-  download.
-- **The expunge happens only after the local copy exists.** Keep that order if the move is ever done
-  by the mirror itself (a rule, see 5) rather than through Dovecot.
+When Move comes, the moved mail is the only copy and should then show in `Merged/Archive`: that is
+the point where the local `Archive` gets used.
 
-### 4. Provider cases
+### 4. Gmail
 
-- **Gmail.** Removing a message from a Gmail folder (a label) does not free space: by default the
-  message stays in *All Mail*. To free space, the message must leave `[Gmail]/All Mail` (or go to
-  Trash and be emptied), depending on the account's *Auto-Expunge* / *When a message is deleted*
-  settings. *Move to server* on a Gmail account has to target All Mail, or say plainly what it
-  frees. This needs a test against a real Gmail account before shipping.
-- **Quotas.** Show what the provider reports (`GETQUOTAROOT`) when it supports the QUOTA extension,
-  and nothing when it doesn't.
+Copy to server works on what is mirrored: every labelled message. Gmail mail with no label (archived
+there) is not mirrored, so it cannot be copied; the action says so for a Gmail account. Mirroring
+All Mail would double `live/` for every Gmail account; for Move, the age rule (below) reads All Mail
+at the provider directly instead.
 
-### 5. Showing why you'd do it
+### 5. It is a second copy
 
-- On the Mail accounts page, each account's used space and quota (when known), next to the space
-  used by mail kept on the server. That is what tells a user "Gmail is at 14.2 of 15 GB".
-- Then, a rule: *move archived mail older than N months to the server*, run by the mirror. It is the
-  natural step after the manual move, and it is what actually keeps a provider under its quota.
+Copied mail is in the server's backup (`mail/<user>/mail/`, already covered). The section's page
+says in one line that the provider keeps its own copy, and that removing an account from MailHub
+keeps what was copied to the server.
 
-### 6. It is now the only copy
+## Later: Move to server
 
-Once mail lives only on the server, the server's backup is what protects it:
+Built on Copy: copy, check the copy exists, then delete at the provider.
 
-- The section's page, and the first *Move to server*, say so in one line.
-- The store's `rationale.md` and the app's backup comment get the same point. The backup already
-  covers `mail/<user>/mail/`, so no config change is needed; it is a wording change.
-- A restore that predates a move brings back a mailbox where the moved mail is missing at both ends.
-  Worth a sentence in the restore notes.
-
-### 7. IMAP clients
-
-A phone's IMAP client, using the device login, already sees the whole Dovecot tree: `Live/`,
-`Merged/`, and the local folders under their raw names. Option: make the local folders appear under
-the same name there too, through a Dovecot namespace prefix or a rename. That is a migration with a
-resync on every client, so it only makes sense together with the move feature, if at all.
+- **The delete at the provider**: the copy, then the account's Trash move (as Delete now does), then
+  expunging it from the provider's Trash. On Gmail only leaving `[Gmail]/Trash` (or expunging there)
+  frees space; to test against a real Gmail account before shipping.
+- **Order**: the expunge only after the local copy exists, also when the mirror does it itself.
+- **Failures** retried and counted on the Mail accounts page (today a failed replay line goes to
+  `failed.jsonl` and is not retried).
+- **Speed**: the replay goes one message at a time; batch UID sets per folder for bulk moves.
+- **Quotas**: each account's used space and quota (`GETQUOTAROOT`, when the provider has QUOTA) on
+  the Mail accounts page, next to the space used on the server.
+- **The age rule**: *move archived mail older than N months to the server*, run by the mirror at the
+  provider directly (on Gmail: search All Mail, fetch, write locally, then Trash). It is the real
+  answer for Gmail, where most mail is archived and unmirrored.
+- **Only copy**: once moved, the server's backup is what protects it; say so on the first move, in
+  the store's `rationale.md` and in the restore notes (a restore that predates a move loses the
+  moved mail at both ends).
 
 ## Phasing
 
-1. `mailhub_folders`: the *On this server* section (display only, shown when non-empty). Small, and
-   useful on its own: it explains where deleted mail goes and where `Sent`/`Drafts` sit.
-2. *Move to server*: a button or folder action, with the disk check, progress, and the Gmail
-   handling (tested on a real Gmail account).
+1. `mailhub_folders`: the *On this server* section (display only, shown when non-empty).
+2. *Copy to server*: the action, target folders, de-duplication, disk check, progress.
 3. Quotas on the Mail accounts page.
-4. The age rule, run by the mirror.
+4. *Move to server*, then the age rule.
 
 ## Open questions
 
-- The name: *On this server* or *Kept on MailHub*.
-- Should the local `Trash` count as "on the server" in the section? It holds deleted mail, which
-  already left the provider.
-- Gmail's *All Mail*: is it mirrored today, and if so, is every Gmail message held twice in `live/`?
-  That affects both the space shown and what a move frees.
+- Recovery for installs that ran mailhub-mirror ≤ 0.6.0: APPEND the unpaired files of each `live/`
+  folder back to the provider (checking by Message-ID that the provider lacks them), or move them
+  into *On this server*. On wisera: 79 messages, to settle with the owner first.
+- Copy of a whole account: one action per account, or per folder only?
+- An account's Trash on Gmail in another language (`[Gmail]/Corbeille`): Delete and the Trash view
+  match folder names, not the provider's `\Trash` special-use. Worth reading `LIST (SPECIAL-USE)`
+  in the mirror.
+- IMAP clients (device login) see the local folders under their raw names; a Dovecot namespace for
+  *On this server* would mean a resync on every client. Probably not worth it.
