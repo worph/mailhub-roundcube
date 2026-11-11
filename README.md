@@ -74,6 +74,11 @@ image was built up to 0.4.0 (history kept here).
   `?_mbox=INBOX`). Under `Live`, each account lists its INBOX first, and each account (and any folder in it with subfolders)
   starts collapsed the first time it is listed (`mailhub_folders_seen` pref); then Roundcube remembers what is
   opened or closed. A container folder (`Live`, an address) opens or closes when its name is clicked.
+  *On this server*: the folder `Local` (created at login when missing, listed after the accounts, a hover hint
+  saying what it means) is the server's own storage. Mail copied or moved into it, or into a folder under it, is
+  kept on this server only: outside `Live/`, so nothing is replayed and the provider never changes, and outside
+  the merged views, so a copy never shows twice. A real folder, so *Copy to… / Move to…*, drag and drop, new
+  subfolders and mail apps (device login) all reach it.
   Does nothing until the merged folders exist (mailhub-mirror 0.4.3+). Needs to be in the app's
   `ROUNDCUBEMAIL_PLUGINS`.
 - **`plugins/mailhub_archive/`**: *Archive*, as on Gmail, next to Delete: in the toolbar (Elastic2022 shows it beside

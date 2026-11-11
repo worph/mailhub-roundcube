@@ -52,25 +52,26 @@ the user put there, it has to be visible, and it has to be clear what it is.
 
 ## Proposal: Copy to server
 
-### 1. A visible "On this server" section
+### 1. A visible "On this server" folder (built, 2026-11-11)
 
-A container listed next to the accounts under `Live/`, shaped like an account. Name: *On this
-server* (plainer than *Kept on MailHub*, and true whatever the app is called). Avoid "Local".
+A real Dovecot folder, `Local`, shown in the webmail as *On this server* (`mailhub_folders`): created
+at login when missing, listed right after the accounts even while empty, with a hover hint ("Kept on
+this server only…"). A real folder rather than a display grouping, so *Copy to… / Move to…*, drag and
+drop, creating subfolders and mail apps on the device login all reach it with no patching; phones see
+it as `Local`.
 
-- It shows the user's own folders and the server's Archive.
-- The local `INBOX`, `Trash` and `Junk` stay hidden: plumbing for the merged views. The local Trash
-  now only gets deleted local mail, so it is not "kept on the server".
-- The local `Sent` and `Drafts` move under it, instead of sitting at the top level next to *Inbox*.
-- Shown once it holds something other than the hidden plumbing, or once Copy to server ships.
-
-Display only (`mailhub_folders`): no Dovecot rename, nothing for IMAP clients to resync.
+- Outside `Live/`: the mirror replays nothing for it, so a copy there never changes the provider.
+- Outside the merged views: a copy never shows twice in Inbox or Archive.
+- The local `INBOX`, `Trash`, `Junk` and `Archive` stay hidden: plumbing for the merged views.
+- The local `Sent` and `Drafts` stay where they are for now; moving them under `Local/` means a
+  Dovecot rename and every identity's Sent/Drafts setting, a migration of its own.
 
 ### 2. The action
 
 *Copy to server* on a message, a selection, or a whole folder of an account:
 
-- Into a folder of the same name under *On this server* (`INBOX` → *Inbox*, `Archive` → *Archive*),
-  created when missing, so a copied account keeps its shape. A message already copied (same
+- Into `Local/<address>/<folder>` (*On this server › address › folder*), created when missing, so a
+  copied account keeps its shape. A message already copied (same
   Message-ID in the target) is skipped, so running it twice is safe.
 - A copy, so the source stays where it is: nothing is replayed, the provider is untouched.
 - **Disk check first**: refuse a copy that would leave the server's disk below a margin. A provider
@@ -124,7 +125,7 @@ Built on Copy: copy, check the copy exists, then delete at the provider.
 
 ## Phasing
 
-1. `mailhub_folders`: the *On this server* section (display only, shown when non-empty).
+1. `mailhub_folders`: the *On this server* folder (`Local`). Built.
 2. *Copy to server*: the action, target folders, de-duplication, disk check, progress.
 3. Quotas on the Mail accounts page.
 4. *Move to server*, then the age rule.
