@@ -14,6 +14,15 @@
  *
  * Buttons: Archive in the toolbar (list and message view), and on each row of the
  * message list on hover, between Delete and the flag. Nothing is archived from inside an archive folder.
+ *
+ * Delete goes the same way: a move to the Trash special folder (Merged/Trash, set by
+ * mailhub_folders: Delete, a row's Delete icon, a drag onto Trash) sends each message
+ * into its own account's Trash (last path part Trash, Deleted Items, Deleted Messages
+ * or Bin: Gmail's [Gmail]/Trash), so the provider has it in its Trash. On Gmail that is
+ * the only real delete: taking a message out of a folder only removes a label, and it
+ * stays in All Mail (mailhub-mirror 0.7.0+ replays the move as a provider MOVE). A
+ * message of the local mailbox, or of an account with no Trash folder, goes into the
+ * local Trash, as before.
  */
 class mailhub_archive extends rcube_plugin
 {
@@ -21,6 +30,8 @@ class mailhub_archive extends rcube_plugin
 
     private const NAMES = ['archive', 'archives'];
     private const LOCAL = 'Archive';
+    private const TRASH_NAMES = ['trash', 'deleted items', 'deleted messages', 'bin'];
+    private const LOCAL_TRASH = 'Trash';
 
     private $folders = null;
     private $result;
@@ -48,7 +59,33 @@ class mailhub_archive extends rcube_plugin
             ], 'toolbar');
         } else {
             $this->register_action('plugin.mailhub_archive', [$this, 'archive']);
+            if ($rcmail->action == 'move') {
+                // after mailhub_folders' startup, which sets trash_mbox
+                $this->add_hook('startup', [$this, 'delete_startup']);
+            }
         }
+    }
+
+    /** A move into the merged Trash (Delete): to each message's own account's Trash. */
+    public function delete_startup($args)
+    {
+        $rcmail = rcmail::get_instance();
+        $trash = (string) $rcmail->config->get('trash_mbox');
+        if ($rcmail->output->ajax_call && $trash !== '' && str_starts_with($trash, 'Merged/')
+            && rcube_utils::get_input_string('_target_mbox', rcube_utils::INPUT_POST, true) === $trash
+        ) {
+            $this->move_each('trash');  // answers and exits
+        }
+
+        return $args;
+    }
+
+    /** Whether $mbox is an account's Trash, the local one, or the merged one. */
+    public static function is_trash($mbox, $delim = '/')
+    {
+        $parts = explode($delim, (string) $mbox);
+
+        return in_array(strtolower(end($parts)), self::TRASH_NAMES, true);
     }
 
     /** The merged Archive (set by mailhub_folders) for skins that show an Archive button with it. */
@@ -74,6 +111,31 @@ class mailhub_archive extends rcube_plugin
         return in_array(strtolower($parts[0]), self::NAMES, true);
     }
 
+    /** The Trash of the account $mbox belongs to; the local Trash when it has none. */
+    private function trash_target($mbox, $delim)
+    {
+        $parts = explode($delim, $mbox);
+        if ($parts[0] === 'Live' && count($parts) >= 3) {
+            $root = 'Live' . $delim . $parts[1] . $delim;
+            foreach ($this->folders() as $f) {
+                if (str_starts_with($f, $root) && self::is_trash($f, $delim)) {
+                    return $f;
+                }
+            }
+        }
+
+        return self::LOCAL_TRASH;
+    }
+
+    private function folders()
+    {
+        if ($this->folders === null) {
+            $this->folders = rcmail::get_instance()->get_storage()->list_folders('', '*', null, null, true);
+        }
+
+        return $this->folders;
+    }
+
     /** The archive folder of the account $mbox belongs to (created when missing). */
     private function target($mbox, $delim)
     {
@@ -81,9 +143,7 @@ class mailhub_archive extends rcube_plugin
         $parts = explode($delim, $mbox);
         $root = ($parts[0] === 'Live' && count($parts) >= 3) ? 'Live' . $delim . $parts[1] . $delim : '';
 
-        if ($this->folders === null) {
-            $this->folders = $storage->list_folders('', '*', null, null, true);
-        }
+        $this->folders();
         foreach (self::NAMES as $name) {
             foreach ($this->folders as $f) {
                 if (str_starts_with($f, $root) && strtolower(substr($f, strlen($root))) === $name) {
@@ -140,11 +200,22 @@ class mailhub_archive extends rcube_plugin
     /** The AJAX action: archive the posted messages, answered like a move. */
     public function archive()
     {
-        $rcmail = rcmail::get_instance();
-        if (!$rcmail->output->ajax_call) {
-            return;
+        if (rcmail::get_instance()->output->ajax_call) {
+            $this->move_each('archive');
         }
+    }
+
+    /**
+     * Move the posted messages, each into the $kind folder (archive, trash) of its own
+     * account, and answer like the core move.
+     */
+    private function move_each($kind)
+    {
+        $rcmail = rcmail::get_instance();
         $this->add_texts('localization/');
+        $skip = $kind == 'trash' ? [self::class, 'is_trash'] : [self::class, 'is_archive'];
+        $done = $kind == 'trash' ? 'deleted' : 'archived';
+        $failed = $kind == 'trash' ? 'deleteerror' : 'archiveerror';
 
         $storage = $rcmail->get_storage();
         $delim = $storage->get_hierarchy_delimiter();
@@ -162,7 +233,7 @@ class mailhub_archive extends rcube_plugin
         $all = false;
 
         foreach (rcmail_action::get_uids(null, null, $multifolder, rcube_utils::INPUT_POST) as $mbox => $uids) {
-            if (self::is_archive($mbox, $delim)) {
+            if ($skip($mbox, $delim)) {
                 continue;
             }
             if ($uids === '*') {
@@ -176,13 +247,17 @@ class mailhub_archive extends rcube_plugin
             foreach ($uids as $uid) {
                 $from = $real[$uid] ?? $mbox;
                 if (str_starts_with($mbox, 'Merged' . $delim) && !isset($real[$uid])) {
-                    $this->result['error'] = true;  // its account unknown: left where it is
+                    if ($kind == 'trash') {
+                        $by_target[self::LOCAL_TRASH][] = $uid;  // its account unknown: deleted as before
+                    } else {
+                        $this->result['error'] = true;  // its account unknown: left where it is
+                    }
                     continue;
                 }
-                if (self::is_archive($from, $delim)) {
+                if ($skip($from, $delim)) {
                     continue;
                 }
-                if ($target = $this->target($from, $delim)) {
+                if ($target = ($kind == 'trash' ? $this->trash_target($from, $delim) : $this->target($from, $delim))) {
                     $by_target[$target][] = $uid;
                 } else {
                     $this->result['error'] = true;
@@ -205,7 +280,7 @@ class mailhub_archive extends rcube_plugin
             if (!$from_show) {
                 $rcmail->output->command('list_mailbox');
             }
-            $rcmail->output->show_message($this->gettext('archiveerror'), 'warning');
+            $rcmail->output->show_message($this->gettext($failed), 'warning');
             $rcmail->output->send();
         }
 
@@ -256,7 +331,7 @@ class mailhub_archive extends rcube_plugin
             rcmail_action_mail_index::js_message_list($storage->list_messages($mbox, null, $sort_col, $sort_ord, $count), false);
         }
 
-        $rcmail->output->show_message($this->gettext($this->result['error'] ? 'archiveerror' : 'archived'),
+        $rcmail->output->show_message($this->gettext($this->result['error'] ? $failed : $done),
             $this->result['error'] ? 'warning' : 'confirmation');
         $rcmail->output->send();
     }
