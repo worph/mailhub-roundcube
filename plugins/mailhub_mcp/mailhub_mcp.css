@@ -8,6 +8,11 @@
 }
 
 .mhm-page { max-width: 60rem; padding: 1rem 1.5rem 2rem; }
+/* The page scrolls by itself: elastic2022 (MailHub's default skin) keeps Elastic's
+   overflow on #layout-content > .formcontent only for .action-show, so a long page was
+   cut off. Full width so the scrollbar sits at the edge; the width cap moves inside. */
+#layout-content > .mhm-page { max-width: none; min-height: 0; overflow-y: auto; }
+#layout-content > .mhm-page > * { max-width: calc(60rem - 3rem); }
 .mhm-title { font-size: 1.3rem; margin: .25rem 0 .5rem; }
 .mhm-intro, .mhm-empty { color: #737677; margin: 0 0 1.25rem; line-height: 1.45; }
 .mhm-sub { font-size: 1.1rem; margin: 1.75rem 0 .5rem; display: flex; align-items: center; gap: 1rem; }
