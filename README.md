@@ -32,7 +32,7 @@ image was built up to 0.4.0 (history kept here).
   (`mailhub_users_dir`, `/var/mailhub/users/<name>.json`: `sub`, name, address, and for every user but the owner
   a generated device password: its `{SSHA512}` hash for Dovecot, its Baïkal digest, and itself encrypted with
   Roundcube's key), which mailhub-mirror 0.5.0+ applies. *Settings → Phones & computers* shows the mailbox's
-  IMAPS and CalDAV/CardDAV login (`MAILHUB_IMAPS_HOST`, `MAILHUB_DAV_URL`); the owner's is the app's credential
+  IMAPS, SMTP (mailhub-submit, 465 / 587: every address through its own provider, same login) and CalDAV/CardDAV login (`MAILHUB_IMAPS_HOST`, `MAILHUB_DAV_URL`); the owner's is the app's credential
   (`MAILHUB_PASSWORD`, changed in Maison), the others can be replaced there. Where skins show the account
   (Outlook above the folders, Elastic's folder-list title) it shows the server account signed in (AppShield's
   user name), not Roundcube's default sender; Roundcube's first identity (`<user>@<IMAP host>`, not an
@@ -50,7 +50,10 @@ image was built up to 0.4.0 (history kept here).
   `Unread` and `Flagged` (`"in_views": false` in its file; mailhub-mirror 0.4.1+), for an address that gets
   mostly spam: still mirrored, read in its own `Live › <address>` folders. *Add an account* opens a dialog: Gmail, Namecheap Private Email or any IMAP/SMTP provider;
   the IMAP and SMTP logins are tested, then the mirror account file (`<user>/<slug>.json`, 0600: each user's
-  own folder) and the identity with the provider's SMTP (identity_smtp's format) are written. Settings:
+  own folder) and the identity with the provider's SMTP (identity_smtp's format) are written. The account file
+  also carries the SMTP server (`smtp_host`, `smtp_port`, `smtp_security`) for mailhub-submit, mailhub-mirror
+  0.8.0's one SMTP login for mail apps (`docs/smtp-relay.md`); files written before 0.8.0 are rewritten once per
+  session, which is why the plugin also loads in the mail task. Settings:
   `mailhub_accounts_dir` (`/var/mailhub/accounts`), `mailhub_mirror_state_dir` (`/var/mailhub/mirror`), both
   with one folder per user since 0.5.0 (mailhub-mirror 0.5.0+).
 - **`plugins/mailhub_branding/`**: the MailHub icon as logo (light, dark, small screens) and favicon in every

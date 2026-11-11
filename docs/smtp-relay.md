@@ -1,6 +1,7 @@
 # Design note: one SMTP login for mail apps
 
-Status: proposal, nothing built. Written 2026-11-10.
+Status: built 2026-11-11 (mailhub-mirror 0.8.0 `submit.py`, mailhub-roundcube 0.8.0), not yet released.
+Proposed 2026-11-10; the review changes are folded in below.
 
 ## Goal
 
@@ -8,129 +9,115 @@ A mail app (Thunderbird, a phone's mail app) sets up MailHub with a single accou
 on the same host, with the same login. Every address the user connected in MailHub can then send
 from that one account, each through its own provider.
 
-Today the app needs the MailHub IMAP login plus one SMTP server per address, with that provider's
-password. That is the hardest part of the phone and desktop setup, and each new client repeats it.
+Before this, the app needed the MailHub IMAP login plus one SMTP server per address, with that
+provider's password. That was the hardest part of the phone and desktop setup, and each new client
+repeated it.
 
-## What exists today
+## What it builds on
 
-- **The webmail sends through each provider.** The webmail has a Roundcube identity per connected
-  account, sent through that provider's SMTP (the `identity_smtp` plugin; `mailhub_accounts` writes
-  its settings). The provider login it uses is the account's own `user` and password, the same as
-  for IMAP.
-- **The mirror already holds those credentials.** It reads `accounts/<user>/<slug>.json`, written by
-  `mailhub_accounts`: `email`, `user`, `pass` (plain text, in a 0700 folder) and the IMAP host. The
-  SMTP host, port and security are not in that file; they stay in Roundcube's prefs.
-- **The device login** (`admin` plus `MAILHUB_PASSWORD`, or a user's generated device password) is
-  checked by Dovecot. IMAPS 993 is published on the host. The app is `requires: [public-ip]`.
+- **The webmail sends through each provider** (`identity_smtp`, settings written by
+  `mailhub_accounts`), with the account's own `user` and password, the same as for IMAP.
+- **The account files** (`accounts/<user>/<slug>.json`, 0600 in 0700 folders) hold `email`, `user`,
+  `pass` and the IMAP server, and since 0.8.0 the SMTP server too (`smtp_host`, `smtp_port`,
+  `smtp_security`: `ssl`, `tls` = STARTTLS, `none`).
+- **The device logins** (`admin` + `MAILHUB_PASSWORD`, or a user's generated device password) are
+  the passwd-file mailhub-mirror renders for Dovecot.
 - **Outbound 465/587 to providers already works from the box**: the webmail uses it.
-- On wisera on 2026-11-10, only 993 was listening among the mail ports; 465 and 587 were free.
 
-## Proposal
+## Shape
 
-### Shape
+`mailhub-submit`: `submit.py` in the mailhub-mirror image (Python, `aiosmtpd` listening, `smtplib`
+to the provider), run as its own service so a crash or a restart doesn't touch the sync.
 
-A small submission server, `mailhub-submit`: Python, `aiosmtpd` for the listening side and
-`smtplib` for the provider side, about 300 lines. Build it into the mailhub-mirror image under a
-second entrypoint and run it as its own service, so a crash or a restart doesn't touch the sync.
+Postfix was rejected. It can route by sender (`sender_dependent_relayhost_maps` plus per-sender SASL),
+but it is heavy to configure for this, and it queues. Dovecot's `submission` service relays to one
+fixed host only.
 
-Postfix was considered and rejected. It can route by sender (`sender_dependent_relayhost_maps`, plus
-per-sender SASL credentials), but it is heavy to configure for this, and it queues. Dovecot 2.4's
-`submission` service relays to one fixed host only, so it can't pick a provider per address.
+## Listening side
 
-### Listening side
+- **465 implicit TLS** (RFC 8314) and **587 STARTTLS**, required before AUTH (for networks that block
+  465). The IMAPS certificate (`tls/`) is used; on renewal Maison restarts the service.
+- **AUTH PLAIN and LOGIN only, after TLS.**
+- **SIZE** 25 MB (Gmail's limit).
 
-- **Port 465, implicit TLS** (RFC 8314), with the IMAPS certificate (`tls/`, the one Maison renews).
-  One port is enough. 587 with STARTTLS is optional; leave it out unless a client needs it.
-- **AUTH PLAIN and LOGIN only, after TLS.** No plain-text listener.
-- **SIZE** advertised at what the providers accept, e.g. 25 MB. Gmail's limit is 25 MB.
+## Authentication: the device login, never the master
 
-### Authentication: the device login, never the master
+Logins are checked **in the relay**, against a copy of the passwd-file (`state/.submit/passwd`,
+written by the mirror next to Dovecot's). Dovecot is never asked. There were two reasons:
 
-The username and password are checked against Dovecot: an `IMAP LOGIN` to `mailhub-imap` on the
-internal port, or Dovecot's auth service over an internal listener.
+- Dovecot accepts its master login from private addresses (`allow_nets` in `seed/dovecot/auth.conf`),
+  and the relay is on a private address. Not talking to Dovecot means a client can't reach the
+  master login through this port, whatever Dovecot's settings become.
+- Dovecot slows down failed logins per source IP. Through a relay that IP is the relay's, so one
+  person guessing passwords would slow down sending for every user.
 
-**Any `authzid`, and any `*` master-user syntax, is refused before Dovecot sees it.** The relay
-connects to Dovecot from a private address, and the master login is accepted from private addresses
-(`allow_nets` in `seed/dovecot/auth.conf`). Passing a client's authzid through would expose the
-master login to the internet. This is the most important rule in this note, and it needs its own
-test.
+On top of that, a PLAIN authorization id other than the user itself is refused, and so is any name
+that isn't a local user (`*`, `/`, `@`, capitals). Failed logins back off per client IP: after 5 in
+10 minutes every login from that IP is refused for 1, then 2, 4… minutes, up to 15.
 
-Failed logins are rate-limited per client IP (fail2ban-style backoff in the process). The same goes
-for IMAPS, if it isn't done there already.
+## Sender check: no open relay
 
-### Sender check: no open relay
-
-For the logged-in local user (`admin`, or a registry user):
-
-- **The allowed senders** are the `email` of each of its account files (`accounts/<user>/*.json`).
-- **Both addresses must be allowed.** `MAIL FROM` and the `From:` header must each be one of them,
-  and must name the same account. Anything else gets `550 5.7.1`.
+- **The allowed senders** are the `email` of each of the user's account files.
+- **Both addresses must be allowed.** `MAIL FROM` must be one of them, and the `From:` header must be
+  exactly that single address. Otherwise `550 5.7.1`.
 - **The provider is chosen from that address**, never from anything else the client sends.
-- **v1 covers each account's main address only.** Aliases (sending as `sales@` through the `contact@`
-  account) come later, with an explicit list in the account file.
+- **Main addresses only.** Aliases (sending as `sales@` through the `contact@` account) come later,
+  with an explicit list in the account file.
+- **A daily cap**: 500 recipients per user per rolling 24 h (`MAILHUB_SUBMIT_DAILY_RCPT`). The
+  device password now also lets someone send as every address the user has, so this limits the
+  damage if it leaks.
 
-### Provider side: synchronous, no queue
+## Provider side: synchronous, no queue
 
-- **The relay stays open until the provider answers.** It holds the client's `DATA` until the
-  provider has answered, then passes on the provider's reply: 2xx stays 2xx, 5xx stays 5xx, and
-  4xx, timeouts or a connection error become 4xx.
-- **Nothing is spooled**, so nothing is silently dropped and there is no queue to manage, monitor or
-  back up. A refusal shows up in Thunderbird at send time: wrong app password, Gmail's sending
-  limit, a revoked password.
-- **Timeouts:** upstream connect 20 s, whole transaction 120 s.
+- **The provider is contacted from `MAIL FROM` onward.** At `MAIL FROM` the relay connects and logs
+  in, so a bad app password shows before the upload. Each `RCPT` gets the provider's own answer, so
+  a recipient the provider refuses is refused to the client for that recipient only. At the end of
+  `DATA` the provider's reply is the client's: 2xx and 5xx kept; 4xx, a timeout or a connection
+  error become 4xx.
+- **Every reply names the account**: `[contact@…] <provider text>`.
+- **Nothing is spooled**, so nothing is silently dropped and there is no queue to manage. A refusal
+  shows up in the mail app at send time.
+- **Timeouts:** connecting 20 s; the whole provider transaction at most 90 s, under Thunderbird's
+  100 s.
 - **Logs:** one line per message: user, account, recipients count, size, provider reply code.
-  Never the subject or the body.
+  Never the subject, the body or a password.
 
-### Credentials
+## Credentials
 
-- **Add the SMTP settings to the account file.** `mailhub_accounts` writes `smtp_host`, `smtp_port`
-  and `smtp_security` next to the IMAP ones. The relay reads the account files read-only, like the
-  mirror does.
-- **No new secret store.** The SMTP password is the account's `pass`, as `identity_smtp` uses
-  today.
-- **Missing fields mean no relay for that account.** An account file written before this change
-  has no SMTP fields: the relay refuses that sender with a clear message ("open Mail accounts and
-  save the account again"), or the webmail rewrites the files once on login.
+- The SMTP password is the account's `pass`, as `identity_smtp` uses today. No new secret store.
+- Account files written before 0.8.0 have no SMTP fields. The webmail rewrites them once per session
+  (`mailhub_accounts::backfill()`, at login and when Mail accounts is opened). Until then the relay
+  refuses that sender with "open Mail accounts and save it again".
+- The provider login is read through one function (`credentials()`), so an OAuth token flow can
+  replace the password later.
 
-### Sent copies
+## Sent copies
 
-Providers differ: Gmail saves a copy of what its SMTP sends, most others don't. Thunderbird saves its
-own copy over IMAP by default, into the folder its account settings name.
+The relay saves nothing. Clients keep their default Sent folder, which is the local `Sent`: the
+same place the webmail saves to (`sent_mbox = 'Sent'`). Nothing is configured per identity.
+Gmail also keeps its own copy of what its SMTP sends.
 
-- **v1: the relay saves nothing.** The tips and the Phones & computers page tell the user to point
-  each identity's *Copies & Folders* at `Live/<address>/Sent`. The mirror replays that APPEND to the
-  provider, so the sent copy reaches the provider's Sent folder.
-- **Later, optionally:** the relay appends the copy itself (not for Gmail), and the docs tell clients
-  not to save one. This only pays off if v1 proves confusing.
+Later, for both the webmail and the relay: the mirror files each message of the local `Sent` into
+`Live/<From address>/Sent`, and copies it to the provider except for Gmail.
 
-### Store listing
+## Store listing
 
-- **New service `mailhub-submit`:** `ports: ["465:31465"]`, `cpu_shares`, about 64 MB, read-only
-  mounts of `accounts/` and `tls/`, on the internal network with `mailhub-imap`.
-- **Tips and Phones & computers:** a second row, "SMTP server | `${APP_TLS_HOST}`, port 465,
-  SSL/TLS, same login". Drop "send through each provider's own SMTP".
-- **`rationale.md`:** a second published port; outbound submission to providers (not port 25, so
-  no IP reputation issue: the provider signs and delivers); the master-login rule; the sender check.
+- **Service `mailhub-submit`:** `ports: ["465:31465", "587:31587"]`, 64 MB, read-only mounts of
+  `accounts/`, `mirror/state/.submit/` and `tls/`.
+- **Tips and Phones & computers:** "SMTP server | `${APP_TLS_HOST}`, port 465 SSL/TLS (or 587
+  STARTTLS), same login".
+- **`rationale.md`:** two more published ports; outbound submission to providers only (no port 25,
+  no IP-reputation issue: the provider signs and delivers); device logins only; the sender check;
+  the daily cap.
 
-## Tests before shipping
+## Tests
 
-1. **The master login.** A client logging in with an authzid, or with `admin*master`-style syntax,
-   is refused. A normal device login works.
-2. **No open relay:**
-   - a sender that isn't one of the user's addresses is refused (`MAIL FROM`, then `From:`);
-   - another user's address is refused;
-   - `MAIL FROM` and `From:` naming two different accounts are refused.
-3. **The provider's reply passes through**, against GreenMail: a 5xx refusal and a 4xx timeout
-   reach the client as such.
-4. **Real providers:** a send through the relay via Gmail (app password) and via a domain mailbox
-   (privateemail.com) reaches the recipient. It is DKIM-signed by the provider, and the copy lands
-   where expected.
-5. **Thunderbird end to end:** one account with all addresses as identities, each sending through
-   the one MailHub SMTP server.
+`mailhub-mirror/tests/test_submit.py` (29 cases, against an in-process fake provider, run in CI):
+the device login on both ports; refusing an authorization id, master-login syntax, AUTH before
+STARTTLS, MAIL before AUTH, and starting the backoff; refusing a foreign sender, another user's
+address, `From:` ≠ `MAIL FROM`, two `From:`s, no `From:`, and `<>`; one refused recipient among
+others; the provider's 5xx/4xx at DATA; a stalled provider (4xx within the budget); a refused
+provider password; the daily cap; SIZE.
 
-## Open questions
-
-- **587** as well as 465, for clients or networks that block 465?
-- **Aliases** in v1, or only after the main addresses work?
-- **Gmail OAuth:** today accounts use app passwords. If OAuth arrives later, the relay needs the
-  token flow too, so it should not assume `pass` is a password forever.
+Still to do by hand on a test box: real Gmail (app password) and privateemail.com sends with DKIM
+checked, and Thunderbird plus one phone client end to end.
