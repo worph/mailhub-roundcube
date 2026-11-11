@@ -504,14 +504,18 @@ class mailhub_sso extends rcube_plugin
             : html::tag('details', ['class' => 'mh-secret'],
                 html::tag('summary', [], rcube::Q($this->gettext('show'))) . html::tag('code', [], rcube::Q($pass)));
 
+        // Thunderbird (and other apps) ask for an address before their server settings: this one
+        // only names the account there; it is never sent from (mail goes out as the identities)
         $table = html::tag('table', ['class' => 'mh-devices propform'],
-            $row('imapserver', $imap !== '' ? "$imap, 993, SSL/TLS" : $this->gettext('nohost'), $imap !== '')
+            ($imap !== '' ? $row('setupaddress', "$local@$imap") : '')
+            . $row('imapserver', $imap !== '' ? "$imap, 993, SSL/TLS" : $this->gettext('nohost'), $imap !== '')
             . $row('username', $local)
             . $row('password', $secret, false)
             . ($dav !== '' ? $row('davurl', $dav) : '')
             . $row('smtp', $imap !== '' ? "$imap, 465, SSL/TLS" : $this->gettext('nohost'), $imap !== '')
             . ($imap !== '' ? $row('smtpalt', "$imap, 587, STARTTLS") : ''));
-        $table .= html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('smtphint')));
+        $table .= ($imap !== '' ? html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('setupaddresshint'))) : '')
+            . html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('smtphint')));
 
         if ($owner) {
             $change = html::p(['class' => 'mh-hint'], rcube::Q($this->gettext('ownerpass')));
