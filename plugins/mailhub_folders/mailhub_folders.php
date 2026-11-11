@@ -23,6 +23,14 @@
  * or closes); a folder that is only a container (Live, an address) opens or
  * closes when its name is clicked, not only its arrow.
  *
+ * On this server: the folder `Local` (created at the first login of a session when
+ * missing) is the server's own storage, listed after the accounts as "On this server",
+ * with what it means in its title. Mail copied or moved into it, or into a folder
+ * under it, is kept on this server only: it is outside Live/, so the mirror replays
+ * nothing for it and the provider is never touched, and outside the merged views, so
+ * a copy never shows twice. A real folder, so Copy to / Move to, drag and drop, new
+ * subfolders and mail apps (the device login) all reach it.
+ *
  * Nothing changes while the merged folders do not exist yet (an older mirror).
  */
 class mailhub_folders extends rcube_plugin
@@ -33,6 +41,7 @@ class mailhub_folders extends rcube_plugin
     private const SPECIAL = ['trash' => 'Merged/Trash', 'junk' => 'Merged/Junk'];
     private const HIDDEN = ['INBOX', 'Trash', 'Junk'];
     private const ARCHIVE = 'Merged/Archive';
+    private const LOCAL = 'Local';
 
     private $active = null;
 
@@ -44,6 +53,7 @@ class mailhub_folders extends rcube_plugin
         }
         $this->add_hook('startup', [$this, 'startup']);
         $this->add_hook('render_mailboxlist', [$this, 'render_mailboxlist']);
+        $this->add_texts('localization/', ['localhint']);
         $this->include_script('mailhub_folders.js');
     }
 
@@ -96,6 +106,7 @@ class mailhub_folders extends rcube_plugin
         if ($this->archive_view()) {
             $rcmail->config->set('archive_mbox', self::ARCHIVE);
         }
+        $this->ensure_local();
 
         // Opening the mail view without a folder: the merged inbox, unless another
         // folder was open in this session.
@@ -107,6 +118,23 @@ class mailhub_folders extends rcube_plugin
         }
 
         return $args;
+    }
+
+    /** The Local folder exists and is subscribed (checked once per session). */
+    private function ensure_local()
+    {
+        if (!empty($_SESSION['mailhub_local'])) {
+            return;
+        }
+        $storage = rcmail::get_instance()->get_storage();
+        if ($storage->folder_exists(self::LOCAL)) {
+            $ok = $storage->folder_exists(self::LOCAL, true) || $storage->subscribe(self::LOCAL);
+        } else {
+            $ok = $storage->create_folder(self::LOCAL, true);
+        }
+        if ($ok) {
+            $_SESSION['mailhub_local'] = true;
+        }
     }
 
     /**
@@ -140,7 +168,24 @@ class mailhub_folders extends rcube_plugin
         }
         $inbox['class'] = 'inbox';
         $inbox['folders'] = [];
-        $args['list'] = [$child => $inbox] + $list;
+        $list = [$child => $inbox] + $list;
+
+        // On this server: after the accounts (Live), under its own name
+        if (isset($list[self::LOCAL])) {
+            $local = $list[self::LOCAL];
+            unset($list[self::LOCAL]);
+            $local['name'] = $this->gettext('local');
+            $local['class'] = trim(($local['class'] ?? '') . ' mailhub-local');
+            $out = [];
+            foreach ($list as $k => $f) {
+                $out[$k] = $f;
+                if ($k === 'Live') {
+                    $out[self::LOCAL] = $local;
+                }
+            }
+            $list = isset($out[self::LOCAL]) ? $out : $out + [self::LOCAL => $local];
+        }
+        $args['list'] = $list;
 
         return $args;
     }
