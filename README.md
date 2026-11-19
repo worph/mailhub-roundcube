@@ -5,9 +5,7 @@ calendar and address book plugins (CalDAV / CardDAV drivers) + identity_smtp (se
 own provider) + our `mailhub_*` plugins (SSO, accounts, folders, archive, DAV, MCP, branding, push) + 11 skins.
 
 The app itself (compose, seeded config, setup scripts, rationale) lives in the store: `Yundera/AppStore` →
-`Apps/MailHub`. The other MailHub images (mirror, MCP server) and the test kit (`dev/`, including
-`skin-shots.js` and `accounts-test.py`) are in [worph/mailhub](https://github.com/worph/mailhub), where this
-image was built up to 0.4.0 (history kept here).
+`Apps/MailHub`.
 
 ## Contents
 
@@ -149,8 +147,7 @@ image was built up to 0.4.0 (history kept here).
   All CC BY-SA 3.0 or GPL-3.0, pinned by tag or commit in the Dockerfile. Outlook and Air are full Elastic
   copies rather than `extends: elastic`, so the Dockerfile links each plugin's Elastic templates for them
   (without it the calendar says "File not found"). Tried and left out: Ultimate Gmail (ships unbuilt, renders
-  unstyled) and Larry (not responsive). worph/mailhub's `dev/skin-shots.js` screenshots each skin (mail,
-  calendar, settings).
+  unstyled) and Larry (not responsive).
 - **`post-setup/10-plugin-schemas.php`**: creates and upgrades the plugins' database tables (the official
   image only handles Roundcube's own), with a fix for libkolab's duplicate SQLite index name.
 
@@ -163,4 +160,3 @@ docker build -t mailhub-roundcube .
 CI (`.github/workflows/build.yml`) builds amd64 + arm64 on every push and PR. Pushing a tag `vX.Y.Z`
 publishes `ghcr.io/worph/mailhub-roundcube:X.Y.Z` (and `X.Y`); then bump the two `mailhub-roundcube` tags in
 the store's `Apps/MailHub/docker-compose.yml` (the `mailhub-webmail` service and the `tls-fallback` hook).
-Versions continue from worph/mailhub: 0.4.0 was the last one built there.
