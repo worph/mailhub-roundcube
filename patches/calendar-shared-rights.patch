@@ -1,0 +1,24 @@
+The calendar driver gives every "personal" calendar full rights. sabre/Baïkal reports a calendar
+shared with the account as owned by the sharee, so a read-only share (MailHub's calendar subscriptions,
+mailhub_dav + mailhub-mirror calsync) looked editable: edits were offered, then refused by the server.
+A calendar whose share-access is read or read-write now takes the rights the server grants
+(current-user-privilege-set). Worth proposing upstream (Kolab).
+
+diff --git a/calendar/drivers/caldav/caldav_calendar.php b/calendar/drivers/caldav/caldav_calendar.php
+index d84e351..a006b23 100644
+--- a/calendar/drivers/caldav/caldav_calendar.php
++++ b/calendar/drivers/caldav/caldav_calendar.php
+@@ -75,7 +75,12 @@ class caldav_calendar extends kolab_storage_dav_folder
+             $this->subtype    = $this->storage->subtype;
+             $this->alarms     = !isset($this->attributes['alarms']) || $this->attributes['alarms'];
+ 
+-            if ($this->storage->get_namespace() == 'personal') {
++            // A calendar shared with this account (sabre/Baïkal reports the sharee as its
++            // owner, so it looks personal) has the rights of its share, not an owner's.
++            $shared_in = in_array($this->attributes['share-access'] ?? '',
++                [kolab_dav_client::SHARING_READ, kolab_dav_client::SHARING_READ_WRITE], true);
++
++            if ($this->storage->get_namespace() == 'personal' && !$shared_in) {
+                 $this->rights = 'lrswikxteav';
+             } else {
+                 $this->rights = $this->storage->get_myrights();

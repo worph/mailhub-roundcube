@@ -18,6 +18,9 @@ image was built up to 0.4.0 (history kept here).
   - `identity_smtp-calendar-task.patch`: invitation replies (calendar task) go through the identity's SMTP.
   - `libkolab-dav-owner.patch`: a DAV account whose name differs from the mail login still counts as
     "my calendars" (`kolab_dav_owner`, set by `mailhub_dav`).
+  - `calendar-shared-rights.patch`: a calendar shared with the account (`share-access` read or read-write)
+    gets the rights its share grants. sabre/Baïkal reports the sharee as such a calendar's owner, so the
+    driver took it for a personal one and offered edits the server then refused (the calendar subscriptions).
 
   Both are worth proposing upstream.
 - **`plugins/mailhub_sso/`**: the server's sign-in is the only login. AppShield signs who is asking on every
@@ -41,7 +44,18 @@ image was built up to 0.4.0 (history kept here).
   the app's `ROUNDCUBEMAIL_PLUGINS`.
 - **`plugins/mailhub_dav/`**: loads the calendar and contacts plugins against MailHub's built-in Baïkal
   (with the mailbox's device login, from `mailhub_sso`), or against another CalDAV/CardDAV server set in
-  *Settings → Calendar & contacts* (tested before saving, password stored encrypted).
+  *Settings → Calendar & contacts* (tested before saving, password stored encrypted). The same page holds the
+  **calendar subscriptions** (needs mailhub-mirror 0.9.0+): Google (*Secret address in iCal format*), Outlook (ICS
+  link), any iCal or `webcal://` address, or a CalDAV calendar with its login, each with a name and colour, kept
+  up to date by the mirror as a read-only calendar of the built-in Baïkal (every 15 minutes; saving the page syncs
+  them at once). A new one is tested before it is added: an iCal address must answer with a calendar (an
+  embed or public-page link is refused with a hint); a CalDAV account address is resolved to its calendar (one:
+  taken; several: the user is asked to add the one they want). Each existing one can be renamed, recoloured or
+  removed (only MailHub's copy), and shows its last update and event count or the error
+  (`<mailhub_mirror_state_dir>/<user>/calendars.json`). Kept in the prefs (`mailhub_calsubs`, address and
+  password encrypted) and written for the mirror to `<mailhub_accounts_dir>/<user>/.calendars.json` (0600),
+  written again at login if missing. While another calendar server is connected, the page says they are not
+  shown (they live in the built-in one).
 - **`plugins/mailhub_accounts/`**: *Settings → Mail accounts*, its own entry in the Settings menu (after
   Identities). One card per account with its live status (refreshed every 15 s: first download count, up to
   date, or the provider's error) and buttons applied at once: *Sync now*, *Change password*, *Rename*, *Remove…*
